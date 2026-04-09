@@ -1,0 +1,6 @@
+rvia_id,standard,sub_cat,code_reference,type,discipline,description,search_text,is_active,last_updated
+1,7.1,a,7.1 (a),A,Electrical,Sample electrical bonding requirement for demonstration only.,7.1 a 7.1 (a) A Electrical Sample electrical bonding requirement for demonstration only.,1,2026-04-09
+2,7.3,,7.3,B,Plumbing,Sample plumbing fixture installation requirement for demonstration only.,7.3 7.3 B Plumbing Sample plumbing fixture installation requirement for demonstration only.,1,2026-04-09
+3,8.2,c,8.2 (c),A,LP Gas,Sample LP gas line routing requirement for demonstration only.,8.2 c 8.2 (c) A LP Gas Sample LP gas line routing requirement for demonstration only.,1,2026-04-09
+4,9.5,b,9.5 (b),C,Structure,Sample structural attachment requirement for demonstration only.,9.5 b 9.5 (b) C Structure Sample structural attachment requirement for demonstration only.,1,2026-04-09
+5,10.4,,10.4,B,Fire & Life Safety,Sample smoke alarm placement requirement for demonstration only.,10.4 10.4 B Fire & Life Safety Sample smoke alarm placement requirement for demonstration only.,1,2026-04-09
