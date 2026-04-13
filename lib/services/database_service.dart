@@ -22,20 +22,42 @@ class DatabaseService {
     final dbPath = await getDatabasesPath();
     final path = join(dbPath, 'code_audit_capture.db');
 
-    return await openDatabase(path, version: 1, onCreate: _onCreate);
+    return await openDatabase(
+      path,
+      version: 2,
+      onCreate: _onCreate,
+      onUpgrade: _onUpgrade,
+    );
   }
 
   Future<void> _onCreate(Database db, int version) async {
     await db.execute('''
       CREATE TABLE audit_writeups (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        plant_number TEXT NOT NULL,
-        code_reference TEXT NOT NULL,
-        discipline TEXT NOT NULL,
-        description TEXT NOT NULL,
-        created_at TEXT NOT NULL
-      )
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  plant_number TEXT NOT NULL,
+  code_reference TEXT NOT NULL,
+  discipline TEXT NOT NULL,
+  description TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  rvia_id INTEGER,
+  rvia_type TEXT,
+  rvia_description TEXT
+)
     ''');
+  }
+
+  Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
+    if (oldVersion < 2) {
+      await db.execute('''
+        ALTER TABLE audit_writeups ADD COLUMN rvia_id INTEGER;
+      ''');
+      await db.execute('''
+        ALTER TABLE audit_writeups ADD COLUMN rvia_type TEXT;
+      ''');
+      await db.execute('''
+        ALTER TABLE audit_writeups ADD COLUMN rvia_description TEXT;
+      ''');
+    }
   }
 
   // Insert a write-up
@@ -56,6 +78,17 @@ class DatabaseService {
       'audit_writeups',
       where: 'plant_number = ?',
       whereArgs: [plantNumber],
+      orderBy: 'created_at DESC',
+    );
+
+    return maps.map((map) => AuditWriteup.fromMap(map)).toList();
+  }
+
+  Future<List<AuditWriteup>> getAllWriteups() async {
+    final db = await database;
+
+    final List<Map<String, dynamic>> maps = await db.query(
+      'audit_writeups',
       orderBy: 'created_at DESC',
     );
 

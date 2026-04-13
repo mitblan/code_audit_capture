@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import '../models/audit_writeup.dart';
 import '../services/database_service.dart';
+import '../models/rvia_code.dart';
+import 'rvia_search_screen.dart';
 
 class NewWriteupScreen extends StatefulWidget {
   final String plantNumber;
@@ -22,6 +24,22 @@ class _NewWriteupScreenState extends State<NewWriteupScreen> {
       TextEditingController();
   final TextEditingController _disciplineController = TextEditingController();
   final TextEditingController _descriptionController = TextEditingController();
+  RviaCode? _selectedRviaCode;
+
+  Future<void> _searchRviaCode() async {
+    final selectedCode = await Navigator.push<RviaCode>(
+      context,
+      MaterialPageRoute(builder: (_) => const RviaSearchScreen()),
+    );
+
+    if (selectedCode != null) {
+      setState(() {
+        _selectedRviaCode = selectedCode; // ✅ Store the selected RVIA code
+        _codeReferenceController.text = selectedCode.codeReference;
+        _disciplineController.text = selectedCode.discipline;
+      });
+    }
+  }
 
   @override
   void initState() {
@@ -58,6 +76,11 @@ class _NewWriteupScreenState extends State<NewWriteupScreen> {
         discipline: _disciplineController.text.trim(),
         description: _descriptionController.text.trim(),
         createdAt: widget.existingWriteup?.createdAt ?? DateTime.now(),
+        rviaId: _selectedRviaCode?.rviaId ?? widget.existingWriteup?.rviaId,
+        rviaType: _selectedRviaCode?.type ?? widget.existingWriteup?.rviaType,
+        rviaDescription:
+            _selectedRviaCode?.description ??
+            widget.existingWriteup?.rviaDescription,
       );
 
       if (widget.existingWriteup == null) {
@@ -94,6 +117,31 @@ class _NewWriteupScreenState extends State<NewWriteupScreen> {
           key: _formKey,
           child: Column(
             children: [
+              SizedBox(
+                width: double.infinity,
+                child: OutlinedButton.icon(
+                  onPressed: _searchRviaCode,
+                  icon: const Icon(Icons.search),
+                  label: const Text('Search RVIA Codes'),
+                ),
+              ),
+              if (_selectedRviaCode != null ||
+                  widget.existingWriteup?.rviaDescription != null)
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(12),
+                  margin: const EdgeInsets.only(bottom: 16),
+                  decoration: BoxDecoration(
+                    border: Border.all(color: Colors.grey.shade400),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Text(
+                    _selectedRviaCode != null
+                        ? 'Selected RVIA: ${_selectedRviaCode!.codeReference} - ${_selectedRviaCode!.description}'
+                        : 'Linked RVIA: ${widget.existingWriteup!.codeReference} - ${widget.existingWriteup!.rviaDescription}',
+                  ),
+                ),
+              const SizedBox(height: 16),
               TextFormField(
                 controller: _codeReferenceController,
                 decoration: const InputDecoration(

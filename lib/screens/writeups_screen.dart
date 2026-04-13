@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'new_writeup_screen.dart';
 import '../models/audit_writeup.dart';
 import '../services/database_service.dart';
+import '../services/export_service.dart';
 
 class WriteupsScreen extends StatefulWidget {
   final String plantNumber;
@@ -54,10 +55,40 @@ class _WriteupsScreenState extends State<WriteupsScreen> {
     await _loadWriteups();
   }
 
+  Future<void> _exportWriteups() async {
+    try {
+      final filePath = await ExportService().exportAllWriteupsToCsv();
+
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('CSV exported to: $filePath'),
+          duration: const Duration(seconds: 4),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Export failed: $e')));
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text('Plant ${widget.plantNumber} Write-ups')),
+      appBar: AppBar(
+        title: Text('Plant ${widget.plantNumber} Write-ups'),
+        actions: [
+          IconButton(
+            onPressed: _exportWriteups,
+            icon: const Icon(Icons.file_download),
+            tooltip: 'Export CSV',
+          ),
+        ],
+      ),
       body: _writeups.isEmpty
           ? const Center(
               child: Text('No write-ups entered for this session yet.'),
