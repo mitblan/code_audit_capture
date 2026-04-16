@@ -13,29 +13,45 @@ class ExportService {
 
     final List<List<dynamic>> rows = [
       [
-        'id',
-        'plant_number',
-        'code_reference',
-        'discipline',
-        'description',
-        'created_at',
-        'rvia_id',
-        'rvia_type',
-        'rvia_description',
+        'Plant #',
+        'Date Detected',
+        'Unit #',
+        'Model #',
+        'Department',
+        'Category',
+        'New Code Referance',
+        'Code Class',
+        'Repeat Violation',
+        'No of Times Repeat',
+        'Detected By',
+        'Non Conformance No',
+        'Code Description',
+        'Grounding',
+        'Solar',
+        'Panel Board',
+        'Appliance Install',
       ],
     ];
 
     for (final writeup in writeups) {
       rows.add([
-        writeup.id,
         writeup.plantNumber,
-        writeup.newCodeReference,
+        _formatAccessDate(writeup.dateDetected),
+        writeup.unitNumber,
+        writeup.modelNumber,
+        writeup.department,
         writeup.category,
+        writeup.newCodeReference,
+        writeup.codeClass,
+        _formatYesNo(writeup.repeatViolation),
+        writeup.timesRepeat,
+        writeup.detectedBy,
         writeup.nonConformanceNo,
-        writeup.dateDetected.toIso8601String(),
-        writeup.rviaId,
-        writeup.rviaType,
-        writeup.rviaDescription,
+        writeup.codeDescription,
+        _formatYesNo(writeup.grounding),
+        _formatYesNo(writeup.solar),
+        _formatYesNo(writeup.panelBoard),
+        _formatYesNo(writeup.applianceInstall),
       ]);
     }
 
@@ -59,5 +75,15 @@ class ExportService {
     await file.writeAsString(csvData);
 
     return filePath;
+  }
+
+  String _formatAccessDate(DateTime? date) {
+    if (date == null) return '';
+    return '${date.month}/${date.day}/${date.year}';
+  }
+
+  String _formatYesNo(bool? value) {
+    if (value == null) return '';
+    return value ? 'Yes' : 'No';
   }
 }
