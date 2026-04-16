@@ -104,9 +104,9 @@ class _WriteupsScreenState extends State<WriteupsScreen> {
                   ),
                   child: ListTile(
                     leading: CircleAvatar(child: Text('${index + 1}')),
-                    title: Text(writeup.codeReference),
+                    title: Text(writeup.newCodeReference),
                     subtitle: Text(
-                      '${writeup.discipline}\n${writeup.description}',
+                      '${writeup.category}\n${writeup.issueDescription}',
                     ),
                     isThreeLine: true,
                     onTap: () => _editWriteup(writeup),

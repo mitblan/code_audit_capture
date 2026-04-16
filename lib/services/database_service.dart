@@ -32,18 +32,31 @@ class DatabaseService {
 
   Future<void> _onCreate(Database db, int version) async {
     await db.execute('''
-      CREATE TABLE audit_writeups (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  plant_number TEXT NOT NULL,
-  code_reference TEXT NOT NULL,
-  discipline TEXT NOT NULL,
-  description TEXT NOT NULL,
-  created_at TEXT NOT NULL,
-  rvia_id INTEGER,
-  rvia_type TEXT,
-  rvia_description TEXT
-)
-    ''');
+    CREATE TABLE audit_writeups (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      plant_number TEXT NOT NULL,
+      date_detected TEXT NOT NULL,
+      detected_by TEXT NOT NULL,
+      unit_number TEXT NOT NULL,
+      model_number TEXT NOT NULL,
+      department TEXT NOT NULL,
+      non_conformance_no TEXT NOT NULL,
+      category TEXT NOT NULL,
+      new_code_reference TEXT NOT NULL,
+      code_class TEXT NOT NULL,
+      code_description TEXT NOT NULL,
+      issue_description TEXT NOT NULL,
+      repeat_violation INTEGER NOT NULL DEFAULT 0,
+      times_repeat INTEGER NOT NULL DEFAULT 0,
+      grounding INTEGER NOT NULL DEFAULT 0,
+      solar INTEGER NOT NULL DEFAULT 0,
+      panel_board INTEGER NOT NULL DEFAULT 0,
+      appliance_install INTEGER NOT NULL DEFAULT 0,
+      rvia_id INTEGER,
+      rvia_type TEXT,
+      rvia_description TEXT
+    )
+  ''');
   }
 
   Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
@@ -78,7 +91,7 @@ class DatabaseService {
       'audit_writeups',
       where: 'plant_number = ?',
       whereArgs: [plantNumber],
-      orderBy: 'created_at DESC',
+      orderBy: 'date_detected DESC',
     );
 
     return maps.map((map) => AuditWriteup.fromMap(map)).toList();
@@ -89,7 +102,7 @@ class DatabaseService {
 
     final List<Map<String, dynamic>> maps = await db.query(
       'audit_writeups',
-      orderBy: 'created_at DESC',
+      orderBy: 'date_detected DESC',
     );
 
     return maps.map((map) => AuditWriteup.fromMap(map)).toList();
