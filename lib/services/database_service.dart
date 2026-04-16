@@ -1,6 +1,7 @@
 import 'package:path/path.dart';
 import 'package:sqflite/sqflite.dart';
 import '../models/audit_writeup.dart';
+import '../models/plant_session_summary.dart';
 
 class DatabaseService {
   static final DatabaseService _instance = DatabaseService._internal();
@@ -98,6 +99,24 @@ class DatabaseService {
     );
 
     return maps.map((map) => AuditWriteup.fromMap(map)).toList();
+  }
+
+  Future<List<PlantSessionSummary>> getPlantSessionSummaries() async {
+    final db = await database;
+
+    final results = await db.rawQuery('''
+    SELECT plant_number, COUNT(*) AS writeupCount
+    FROM audit_writeups
+    GROUP BY plant_number
+    ORDER BY CAST(plant_number AS INTEGER)
+  ''');
+
+    return results.map((row) {
+      return PlantSessionSummary(
+        plantNumber: row['plant_number'] as String,
+        writeupCount: row['writeupCount'] as int,
+      );
+    }).toList();
   }
 
   Future<int> deleteWriteup(int id) async {
