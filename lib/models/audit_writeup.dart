@@ -18,9 +18,6 @@ class AuditWriteup {
   final String codeClass;
   final String codeDescription;
 
-  // User-Entered Description
-  final String issueDescription;
-
   // Repeat Violation
   final bool repeatViolation;
   final int timesRepeat;
@@ -49,7 +46,6 @@ class AuditWriteup {
     required this.newCodeReference,
     required this.codeClass,
     required this.codeDescription,
-    required this.issueDescription,
     this.repeatViolation = false,
     this.timesRepeat = 0,
     this.grounding = false,
@@ -75,7 +71,6 @@ class AuditWriteup {
       'new_code_reference': newCodeReference,
       'code_class': codeClass,
       'code_description': codeDescription,
-      'issue_description': issueDescription,
       'repeat_violation': repeatViolation ? 1 : 0,
       'times_repeat': timesRepeat,
       'grounding': grounding ? 1 : 0,
@@ -102,7 +97,6 @@ class AuditWriteup {
       newCodeReference: map['new_code_reference'] as String,
       codeClass: map['code_class'] as String,
       codeDescription: map['code_description'] as String,
-      issueDescription: map['issue_description'] as String,
       repeatViolation: (map['repeat_violation'] as int) == 1,
       timesRepeat: map['times_repeat'] as int,
       grounding: (map['grounding'] as int) == 1,

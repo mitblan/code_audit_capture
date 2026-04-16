@@ -106,7 +106,7 @@ class _WriteupsScreenState extends State<WriteupsScreen> {
                     leading: CircleAvatar(child: Text('${index + 1}')),
                     title: Text(writeup.newCodeReference),
                     subtitle: Text(
-                      '${writeup.category}\n${writeup.issueDescription}',
+                      '${writeup.category}\n${writeup.nonConformanceNo}',
                     ),
                     isThreeLine: true,
                     onTap: () => _editWriteup(writeup),

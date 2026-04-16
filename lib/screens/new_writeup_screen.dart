@@ -161,7 +161,6 @@ class _NewWriteupScreenState extends State<NewWriteupScreen> {
         newCodeReference: _codeReferenceController.text.trim(),
         codeClass: _codeClassController.text.trim(),
         codeDescription: _codeDescriptionController.text.trim(),
-        issueDescription: _violationDescriptionController.text.trim(),
         repeatViolation: _repeatViolation,
         timesRepeat: _repeatViolation ? timesRepeat : 0,
         grounding: _grounding,

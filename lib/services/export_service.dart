@@ -31,7 +31,7 @@ class ExportService {
         writeup.plantNumber,
         writeup.newCodeReference,
         writeup.category,
-        writeup.issueDescription,
+        writeup.nonConformanceNo,
         writeup.dateDetected.toIso8601String(),
         writeup.rviaId,
         writeup.rviaType,
