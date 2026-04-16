@@ -57,18 +57,22 @@ class _WriteupsScreenState extends State<WriteupsScreen> {
 
   Future<void> _exportWriteups() async {
     try {
-      final filePath = await ExportService().exportAllWriteupsToCsv();
+      final String? result = await ExportService().exportAllWriteupsToCsv();
 
-      if (!mounted) return;
+      if (!context.mounted) return;
+
+      if (result == null) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('Export cancelled.')));
+        return;
+      }
 
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('CSV exported to: $filePath'),
-          duration: const Duration(seconds: 4),
-        ),
+        const SnackBar(content: Text('Export completed successfully.')),
       );
     } catch (e) {
-      if (!mounted) return;
+      if (!context.mounted) return;
 
       ScaffoldMessenger.of(
         context,

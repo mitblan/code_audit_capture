@@ -1,13 +1,15 @@
+import 'dart:convert';
 import 'dart:io';
+
 import 'package:csv/csv.dart';
-import 'package:path/path.dart' as p;
-import 'package:sqflite/sqflite.dart';
+import 'package:file_picker/file_picker.dart';
+import 'package:flutter/foundation.dart';
 
 import '../models/audit_writeup.dart';
 import 'database_service.dart';
 
 class ExportService {
-  Future<String> exportAllWriteupsToCsv() async {
+  Future<String?> exportAllWriteupsToCsv() async {
     final List<AuditWriteup> writeups = await DatabaseService()
         .getAllWriteups();
 
@@ -44,7 +46,7 @@ class ExportService {
         writeup.newCodeReference,
         writeup.codeClass,
         _formatYesNo(writeup.repeatViolation),
-        writeup.timesRepeat,
+        writeup.timesRepeat.toString(),
         writeup.detectedBy,
         writeup.nonConformanceNo,
         writeup.codeDescription,
@@ -56,34 +58,66 @@ class ExportService {
     }
 
     final String csvData = const ListToCsvConverter().convert(rows);
+    final String fileName =
+        'code_audit_export_${_buildTimestampForFileName(DateTime.now())}.csv';
 
-    final dbPath = await getDatabasesPath();
-    final exportDir = Directory(p.join(dbPath, 'exports'));
-
-    if (!await exportDir.exists()) {
-      await exportDir.create(recursive: true);
+    if (kIsWeb) {
+      throw UnsupportedError('CSV export is not configured for web.');
     }
 
-    final timestamp = DateTime.now()
-        .toIso8601String()
-        .replaceAll(':', '-')
-        .replaceAll('.', '-');
+    // Mobile platforms need bytes passed directly into saveFile.
+    if (Platform.isAndroid || Platform.isIOS) {
+      final bytes = Uint8List.fromList(utf8.encode(csvData));
 
-    final filePath = p.join(exportDir.path, 'code_audit_export_$timestamp.csv');
+      final String? savedPath = await FilePicker.platform.saveFile(
+        dialogTitle: 'Save Code Audit Export',
+        fileName: fileName,
+        type: FileType.custom,
+        allowedExtensions: ['csv'],
+        bytes: bytes,
+      );
 
-    final file = File(filePath);
+      return savedPath;
+    }
+
+    // Desktop platforms can return a path which we then write to.
+    final String? outputPath = await FilePicker.platform.saveFile(
+      dialogTitle: 'Save Code Audit Export',
+      fileName: fileName,
+      type: FileType.custom,
+      allowedExtensions: ['csv'],
+      lockParentWindow: true,
+    );
+
+    if (outputPath == null) {
+      return null;
+    }
+
+    final file = File(outputPath);
     await file.writeAsString(csvData);
 
-    return filePath;
+    return outputPath;
   }
 
-  String _formatAccessDate(DateTime? date) {
-    if (date == null) return '';
-    return '${date.month}/${date.day}/${date.year}';
+  String _formatAccessDate(DateTime date) {
+    final month = date.month.toString().padLeft(2, '0');
+    final day = date.day.toString().padLeft(2, '0');
+    final year = (date.year % 100).toString().padLeft(2, '0');
+    return '$month/$day/$year';
   }
 
-  String _formatYesNo(bool? value) {
-    if (value == null) return '';
+  String _formatYesNo(bool value) {
     return value ? 'Yes' : 'No';
+  }
+
+  String _buildTimestampForFileName(DateTime dateTime) {
+    final year = dateTime.year.toString();
+    final month = dateTime.month.toString().padLeft(2, '0');
+    final day = dateTime.day.toString().padLeft(2, '0');
+    final hour = dateTime.hour.toString().padLeft(2, '0');
+    final minute = dateTime.minute.toString().padLeft(2, '0');
+    final second = dateTime.second.toString().padLeft(2, '0');
+
+    return '${year}${month}${day}_${hour}${minute}${second}';
   }
 }
