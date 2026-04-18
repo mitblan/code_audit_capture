@@ -91,7 +91,6 @@ class _NewWriteupScreenState extends State<NewWriteupScreen> {
           rviaId: existing.rviaId!,
           standard: '',
           subCat: '',
-          codeReference: existing.newCodeReference,
           type: existing.rviaType ?? existing.codeClass,
           discipline: existing.category,
           description: existing.rviaDescription ?? existing.codeDescription,

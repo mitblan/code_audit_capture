@@ -2,6 +2,7 @@ import 'package:path/path.dart';
 import 'package:sqflite/sqflite.dart';
 import '../models/audit_writeup.dart';
 import '../models/plant_session_summary.dart';
+import '../models/rvia_code.dart';
 
 class DatabaseService {
   static final DatabaseService _instance = DatabaseService._internal();
@@ -25,7 +26,7 @@ class DatabaseService {
 
     return await openDatabase(
       path,
-      version: 3,
+      version: 4,
       onCreate: _onCreate,
       onUpgrade: _onUpgrade,
     );
@@ -33,37 +34,47 @@ class DatabaseService {
 
   Future<void> _onCreate(Database db, int version) async {
     await db.execute('''
-      CREATE TABLE audit_writeups (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        plant_number TEXT NOT NULL,
-        date_detected TEXT NOT NULL,
-        detected_by TEXT NOT NULL,
-        unit_number TEXT NOT NULL,
-        model_number TEXT NOT NULL,
-        department TEXT NOT NULL,
-        non_conformance_no TEXT NOT NULL,
-        category TEXT NOT NULL,
-        new_code_reference TEXT NOT NULL,
-        code_class TEXT NOT NULL,
-        code_description TEXT NOT NULL,
-        repeat_violation INTEGER NOT NULL DEFAULT 0,
-        times_repeat INTEGER NOT NULL DEFAULT 0,
-        grounding INTEGER NOT NULL DEFAULT 0,
-        solar INTEGER NOT NULL DEFAULT 0,
-        panel_board INTEGER NOT NULL DEFAULT 0,
-        appliance_install INTEGER NOT NULL DEFAULT 0,
-        rvia_id INTEGER,
-        rvia_type TEXT,
-        rvia_description TEXT
-      )
-    ''');
+    CREATE TABLE audit_writeups (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      plant_number TEXT NOT NULL,
+      date_detected TEXT NOT NULL,
+      detected_by TEXT NOT NULL,
+      unit_number TEXT NOT NULL,
+      model_number TEXT NOT NULL,
+      department TEXT NOT NULL,
+      non_conformance_no TEXT NOT NULL,
+      category TEXT NOT NULL,
+      new_code_reference TEXT NOT NULL,
+      code_class TEXT NOT NULL,
+      code_description TEXT NOT NULL,
+      repeat_violation INTEGER NOT NULL DEFAULT 0,
+      times_repeat INTEGER NOT NULL DEFAULT 0,
+      grounding INTEGER NOT NULL DEFAULT 0,
+      solar INTEGER NOT NULL DEFAULT 0,
+      panel_board INTEGER NOT NULL DEFAULT 0,
+      appliance_install INTEGER NOT NULL DEFAULT 0,
+      rvia_id INTEGER,
+      rvia_type TEXT,
+      rvia_description TEXT
+    )
+  ''');
+
+    await db.execute('''
+    CREATE TABLE rvia_codes (
+      rvia_id INTEGER PRIMARY KEY,
+      standard TEXT NOT NULL,
+      sub_cat TEXT NOT NULL,
+      type TEXT NOT NULL,
+      discipline TEXT NOT NULL,
+      description TEXT NOT NULL
+    )
+  ''');
   }
 
   Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
-    // Since the schema changed significantly during development,
-    // rebuild the table cleanly for version 3.
-    if (oldVersion < 3) {
+    if (oldVersion < 4) {
       await db.execute('DROP TABLE IF EXISTS audit_writeups');
+      await db.execute('DROP TABLE IF EXISTS rvia_codes');
       await _onCreate(db, newVersion);
     }
   }
@@ -117,6 +128,45 @@ class DatabaseService {
         writeupCount: row['writeupCount'] as int,
       );
     }).toList();
+  }
+
+  Future<int> getRviaCodeCount() async {
+    final db = await database;
+    final result = await db.rawQuery(
+      'SELECT COUNT(*) AS count FROM rvia_codes',
+    );
+    return Sqflite.firstIntValue(result) ?? 0;
+  }
+
+  Future<List<RviaCode>> getAllRviaCodes() async {
+    final db = await database;
+
+    final List<Map<String, dynamic>> maps = await db.query(
+      'rvia_codes',
+      orderBy: 'standard, sub_cat',
+    );
+
+    return maps.map((map) => RviaCode.fromMap(map)).toList();
+  }
+
+  Future<void> replaceAllRviaCodes(List<RviaCode> codes) async {
+    final db = await database;
+
+    await db.transaction((txn) async {
+      await txn.delete('rvia_codes');
+
+      final batch = txn.batch();
+
+      for (final code in codes) {
+        batch.insert(
+          'rvia_codes',
+          code.toMap(),
+          conflictAlgorithm: ConflictAlgorithm.replace,
+        );
+      }
+
+      await batch.commit(noResult: true);
+    });
   }
 
   Future<int> deleteWriteup(int id) async {
