@@ -5,6 +5,7 @@ import '../services/database_service.dart';
 import '../services/export_service.dart';
 import 'settings_screen.dart';
 import 'writeups_screen.dart';
+import '../services/session_pdf_export_service.dart';
 
 class SessionScreen extends StatefulWidget {
   const SessionScreen({super.key});
@@ -101,9 +102,21 @@ class _SessionScreenState extends State<SessionScreen> {
   }
 
   Future<void> _exportPlantPdf(String plantNumber) async {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('Plant $plantNumber PDF export is next.')),
-    );
+    try {
+      await SessionPdfExportService().exportPlantSessionPdf(plantNumber);
+
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('PDF generated for Plant $plantNumber')),
+      );
+    } catch (e) {
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('PDF export failed: $e')));
+    }
   }
 
   @override

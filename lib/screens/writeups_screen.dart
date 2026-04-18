@@ -3,6 +3,7 @@ import 'new_writeup_screen.dart';
 import '../models/audit_writeup.dart';
 import '../services/database_service.dart';
 import '../services/export_service.dart';
+import '../services/session_pdf_export_service.dart';
 
 class WriteupsScreen extends StatefulWidget {
   final String plantNumber;
@@ -80,6 +81,24 @@ class _WriteupsScreenState extends State<WriteupsScreen> {
     }
   }
 
+  Future<void> _exportPlantPdf(String plantNumber) async {
+    try {
+      await SessionPdfExportService().exportPlantSessionPdf(plantNumber);
+
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('PDF generated for Plant $plantNumber')),
+      );
+    } catch (e) {
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('PDF export failed: $e')));
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -87,9 +106,9 @@ class _WriteupsScreenState extends State<WriteupsScreen> {
         title: Text('Plant ${widget.plantNumber} Write-ups'),
         actions: [
           IconButton(
-            onPressed: _exportWriteups,
-            icon: const Icon(Icons.file_download),
-            tooltip: 'Export CSV',
+            onPressed: () => _exportPlantPdf(widget.plantNumber),
+            icon: const Icon(Icons.picture_as_pdf),
+            tooltip: 'Export PDF',
           ),
         ],
       ),
