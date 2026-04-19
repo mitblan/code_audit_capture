@@ -3,6 +3,7 @@ import 'package:sqflite/sqflite.dart';
 import '../models/audit_writeup.dart';
 import '../models/plant_session_summary.dart';
 import '../models/rvia_code.dart';
+import '../models/plant.dart';
 
 class DatabaseService {
   static final DatabaseService _instance = DatabaseService._internal();
@@ -26,7 +27,7 @@ class DatabaseService {
 
     return await openDatabase(
       path,
-      version: 4,
+      version: 5,
       onCreate: _onCreate,
       onUpgrade: _onUpgrade,
     );
@@ -69,12 +70,22 @@ class DatabaseService {
       description TEXT NOT NULL
     )
   ''');
+
+    await db.execute('''
+    CREATE TABLE plants (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      plant_number TEXT NOT NULL UNIQUE
+    )
+  ''');
+
+    await _seedDefaultPlants(db);
   }
 
   Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
     if (oldVersion < 4) {
       await db.execute('DROP TABLE IF EXISTS audit_writeups');
       await db.execute('DROP TABLE IF EXISTS rvia_codes');
+      await db.execute('DROP TABLE IF EXISTS plants');
       await _onCreate(db, newVersion);
     }
   }
@@ -183,5 +194,67 @@ class DatabaseService {
       where: 'id = ?',
       whereArgs: [writeup.id],
     );
+  }
+
+  Future<void> _seedDefaultPlants(Database db) async {
+    const defaultPlants = ['320', '340', '501', '810', '815'];
+
+    final batch = db.batch();
+
+    for (final plant in defaultPlants) {
+      batch.insert('plants', {
+        'plant_number': plant,
+      }, conflictAlgorithm: ConflictAlgorithm.ignore);
+    }
+
+    await batch.commit(noResult: true);
+  }
+
+  Future<List<Plant>> getAllPlants() async {
+    final db = await database;
+
+    final maps = await db.query(
+      'plants',
+      orderBy: 'CAST(plant_number AS INTEGER)',
+    );
+
+    return maps.map((map) => Plant.fromMap(map)).toList();
+  }
+
+  Future<bool> plantExists(String plantNumber) async {
+    final db = await database;
+
+    final result = await db.query(
+      'plants',
+      where: 'LOWER(plant_number) = ?',
+      whereArgs: [plantNumber.trim().toLowerCase()],
+    );
+
+    return result.isNotEmpty;
+  }
+
+  Future<int> insertPlant(Plant plant) async {
+    final db = await database;
+
+    return await db.insert('plants', {
+      'plant_number': plant.plantNumber.trim(),
+    }, conflictAlgorithm: ConflictAlgorithm.abort);
+  }
+
+  Future<int> updatePlant(Plant plant) async {
+    final db = await database;
+
+    return await db.update(
+      'plants',
+      {'plant_number': plant.plantNumber.trim()},
+      where: 'id = ?',
+      whereArgs: [plant.id],
+    );
+  }
+
+  Future<int> deletePlant(int id) async {
+    final db = await database;
+
+    return await db.delete('plants', where: 'id = ?', whereArgs: [id]);
   }
 }

@@ -6,6 +6,7 @@ import '../services/export_service.dart';
 import 'settings_screen.dart';
 import 'writeups_screen.dart';
 import '../services/session_pdf_export_service.dart';
+import '../models/plant.dart';
 
 class SessionScreen extends StatefulWidget {
   const SessionScreen({super.key});
@@ -15,7 +16,7 @@ class SessionScreen extends StatefulWidget {
 }
 
 class _SessionScreenState extends State<SessionScreen> {
-  final List<String> _plants = ['320', '340', '501', '810', '815'];
+  List<Plant> _plants = [];
 
   String? _selectedPlant;
   List<PlantSessionSummary> _sessionSummaries = [];
@@ -33,14 +34,39 @@ class _SessionScreenState extends State<SessionScreen> {
       _isLoading = true;
     });
 
-    final summaries = await DatabaseService().getPlantSessionSummaries();
+    try {
+      final summaries = await DatabaseService().getPlantSessionSummaries();
+      final plants = await DatabaseService().getAllPlants();
 
-    if (!mounted) return;
+      if (!mounted) return;
 
-    setState(() {
-      _sessionSummaries = summaries;
-      _isLoading = false;
-    });
+      setState(() {
+        _sessionSummaries = summaries;
+        _plants = plants;
+
+        // 🔥 FIX: reset selected plant if it no longer exists
+        final validPlantNumbers = _plants.map((p) => p.plantNumber).toSet();
+
+        if (_selectedPlant != null &&
+            !validPlantNumbers.contains(_selectedPlant)) {
+          _selectedPlant = null;
+        }
+
+        _isLoading = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+
+      setState(() {
+        _sessionSummaries = [];
+        _plants = [];
+        _isLoading = false;
+      });
+
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Failed to load sessions: $e')));
+    }
   }
 
   Future<void> _startSession() async {
@@ -130,11 +156,13 @@ class _SessionScreenState extends State<SessionScreen> {
           IconButton(
             tooltip: 'Settings',
             icon: const Icon(Icons.settings),
-            onPressed: () {
-              Navigator.push(
+            onPressed: () async {
+              await Navigator.push(
                 context,
                 MaterialPageRoute(builder: (_) => const SettingsScreen()),
               );
+
+              await _loadSessionSummaries();
             },
           ),
         ],
@@ -162,8 +190,8 @@ class _SessionScreenState extends State<SessionScreen> {
                     items: _plants
                         .map(
                           (plant) => DropdownMenuItem<String>(
-                            value: plant,
-                            child: Text('Plant $plant'),
+                            value: plant.plantNumber,
+                            child: Text('Plant ${plant.plantNumber}'),
                           ),
                         )
                         .toList(),

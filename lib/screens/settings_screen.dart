@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../services/database_service.dart';
 import '../services/rvia_import_service.dart';
+import 'manage_plants_screen.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -131,6 +132,20 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   ),
                 ],
               ),
+            ),
+          ),
+          const SizedBox(height: 16),
+          Card(
+            child: ListTile(
+              title: const Text('Manage Plants'),
+              subtitle: const Text('Add, edit, or delete plant numbers'),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const ManagePlantsScreen()),
+                );
+              },
             ),
           ),
         ],
