@@ -1,10 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../models/audit_writeup.dart';
-import '../models/departments.dart';
+import '../models/department.dart';
 import '../models/rvia_code.dart';
 import '../services/database_service.dart';
 import 'rvia_search_screen.dart';
+import '../models/plant_unit_prefix.dart';
 
 class NewWriteupScreen extends StatefulWidget {
   final String plantNumber;
@@ -24,8 +25,13 @@ class _NewWriteupScreenState extends State<NewWriteupScreen> {
   final GlobalKey<FormState> _formKey = GlobalKey<FormState>();
 
   // Row 2
-  final TextEditingController _unitNumberController = TextEditingController();
+  final TextEditingController _unitSuffixController = TextEditingController();
   final TextEditingController _modelNumberController = TextEditingController();
+
+  String? _selectedUnitPrefix;
+  List<PlantUnitPrefix> _unitPrefixes = [];
+  bool _isLoadingUnitPrefixes = true;
+
   String? _selectedDepartment;
   List<Department> _departments = [];
   bool _isLoadingDepartments = true;
@@ -56,10 +62,10 @@ class _NewWriteupScreenState extends State<NewWriteupScreen> {
   void initState() {
     super.initState();
     _loadDepartments();
+    _loadUnitPrefixes();
 
     final existing = widget.existingWriteup;
     if (existing != null) {
-      _unitNumberController.text = existing.unitNumber;
       _modelNumberController.text = existing.modelNumber;
       _selectedDepartment = existing.department.isNotEmpty
           ? existing.department
@@ -97,7 +103,7 @@ class _NewWriteupScreenState extends State<NewWriteupScreen> {
 
   @override
   void dispose() {
-    _unitNumberController.dispose();
+    _unitSuffixController.dispose();
     _modelNumberController.dispose();
     _timesRepeatController.dispose();
     _violationDescriptionController.dispose();
@@ -108,6 +114,94 @@ class _NewWriteupScreenState extends State<NewWriteupScreen> {
     _codeDescriptionController.dispose();
 
     super.dispose();
+  }
+
+  Future<void> _loadUnitPrefixes() async {
+    try {
+      final prefixes = await DatabaseService().getPrefixesForPlant(
+        widget.plantNumber,
+      );
+
+      if (!mounted) return;
+
+      setState(() {
+        _unitPrefixes = prefixes;
+        _isLoadingUnitPrefixes = false;
+      });
+
+      _initializeUnitPrefixSelection();
+    } catch (e) {
+      if (!mounted) return;
+
+      setState(() {
+        _unitPrefixes = [];
+        _isLoadingUnitPrefixes = false;
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to load unit prefixes: $e')),
+      );
+    }
+  }
+
+  List<String> _unitPrefixOptions() {
+    final prefixes = _unitPrefixes.map((p) => p.prefix).toList();
+
+    final currentValue = _selectedUnitPrefix?.trim();
+
+    if (currentValue != null &&
+        currentValue.isNotEmpty &&
+        !prefixes.contains(currentValue)) {
+      prefixes.add(currentValue);
+      prefixes.sort((a, b) => a.compareTo(b));
+    }
+
+    return prefixes;
+  }
+
+  void _initializeUnitPrefixSelection() {
+    final existing = widget.existingWriteup;
+
+    if (existing != null) {
+      _splitExistingUnitNumber(existing.unitNumber);
+      return;
+    }
+
+    if (_selectedUnitPrefix == null && _unitPrefixes.isNotEmpty) {
+      final defaultPrefix = _unitPrefixes.cast<PlantUnitPrefix?>().firstWhere(
+        (p) => p?.isDefault == true,
+        orElse: () => null,
+      );
+
+      setState(() {
+        _selectedUnitPrefix =
+            defaultPrefix?.prefix ?? _unitPrefixes.first.prefix;
+      });
+    }
+  }
+
+  void _splitExistingUnitNumber(String unitNumber) {
+    final trimmed = unitNumber.trim();
+
+    if (trimmed.isEmpty) return;
+
+    final prefixes = _unitPrefixes.map((p) => p.prefix).toList()
+      ..sort((a, b) => b.length.compareTo(a.length));
+
+    for (final prefix in prefixes) {
+      if (trimmed.startsWith(prefix)) {
+        setState(() {
+          _selectedUnitPrefix = prefix;
+          _unitSuffixController.text = trimmed.substring(prefix.length);
+        });
+        return;
+      }
+    }
+
+    setState(() {
+      _selectedUnitPrefix = null;
+      _unitSuffixController.text = trimmed;
+    });
   }
 
   Future<void> _loadDepartments() async {
@@ -190,7 +284,8 @@ class _NewWriteupScreenState extends State<NewWriteupScreen> {
         plantNumber: widget.plantNumber,
         dateDetected: widget.existingWriteup?.dateDetected ?? DateTime.now(),
         detectedBy: widget.existingWriteup?.detectedBy ?? 'Audit',
-        unitNumber: _unitNumberController.text.trim(),
+        unitNumber:
+            '${_selectedUnitPrefix ?? ''}${_unitSuffixController.text.trim().toUpperCase()}',
         modelNumber: _modelNumberController.text.trim(),
         department: _selectedDepartment ?? '',
         nonConformanceNo: _violationDescriptionController.text.trim(),
@@ -286,24 +381,62 @@ class _NewWriteupScreenState extends State<NewWriteupScreen> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Flexible(
-          flex: 2,
-          child: TextFormField(
-            controller: _unitNumberController,
-            textCapitalization: TextCapitalization.characters,
-            inputFormatters: [
-              FilteringTextInputFormatter.allow(RegExp(r'[a-zA-Z0-9\- ]')),
-              UpperCaseTextFormatter(),
+          flex: 3,
+          child: Row(
+            children: [
+              Expanded(
+                flex: 2,
+                child: DropdownButtonFormField<String>(
+                  value: _unitPrefixOptions().contains(_selectedUnitPrefix)
+                      ? _selectedUnitPrefix
+                      : null,
+                  decoration: const InputDecoration(
+                    labelText: 'Prefix',
+                    border: OutlineInputBorder(),
+                  ),
+                  items: _unitPrefixOptions()
+                      .map(
+                        (prefix) => DropdownMenuItem<String>(
+                          value: prefix,
+                          child: Text(prefix),
+                        ),
+                      )
+                      .toList(),
+                  onChanged: _isLoadingUnitPrefixes
+                      ? null
+                      : (value) {
+                          setState(() {
+                            _selectedUnitPrefix = value;
+                          });
+                        },
+                  validator: (value) {
+                    if (value == null || value.trim().isEmpty) {
+                      return 'Required';
+                    }
+                    return null;
+                  },
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                flex: 3,
+                child: TextFormField(
+                  controller: _unitSuffixController,
+                  keyboardType: TextInputType.number,
+                  inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                  decoration: const InputDecoration(
+                    labelText: 'Unit #',
+                    border: OutlineInputBorder(),
+                  ),
+                  validator: (value) {
+                    if (value == null || value.trim().isEmpty) {
+                      return 'Required';
+                    }
+                    return null;
+                  },
+                ),
+              ),
             ],
-            decoration: const InputDecoration(
-              labelText: 'Unit',
-              border: OutlineInputBorder(),
-            ),
-            validator: (value) {
-              if (value == null || value.trim().isEmpty) {
-                return 'Required';
-              }
-              return null;
-            },
           ),
         ),
         const SizedBox(width: 8),

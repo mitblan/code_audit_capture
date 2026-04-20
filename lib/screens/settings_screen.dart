@@ -4,6 +4,7 @@ import '../services/database_service.dart';
 import '../services/rvia_import_service.dart';
 import 'manage_plants_screen.dart';
 import 'manage_departments.screen.dart';
+import 'manage_unit_prefixes_screen.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -145,6 +146,21 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 Navigator.push(
                   context,
                   MaterialPageRoute(builder: (_) => const ManagePlantsScreen()),
+                );
+              },
+            ),
+          ),
+          Card(
+            child: ListTile(
+              leading: const Icon(Icons.tag),
+              title: const Text('Manage Unit Prefixes'),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => const ManageUnitPrefixesScreen(),
+                  ),
                 );
               },
             ),

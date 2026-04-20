@@ -4,7 +4,8 @@ import '../models/audit_writeup.dart';
 import '../models/plant_session_summary.dart';
 import '../models/rvia_code.dart';
 import '../models/plant.dart';
-import '../models/departments.dart';
+import '../models/department.dart';
+import '../models/plant_unit_prefix.dart';
 
 class DatabaseService {
   static final DatabaseService _instance = DatabaseService._internal();
@@ -28,7 +29,7 @@ class DatabaseService {
 
     return await openDatabase(
       path,
-      version: 6,
+      version: 7,
       onCreate: _onCreate,
       onUpgrade: _onUpgrade,
     );
@@ -85,6 +86,15 @@ class DatabaseService {
         name TEXT NOT NULL UNIQUE
       )
     ''');
+    await db.execute('''
+  CREATE TABLE plant_unit_prefixes (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    plant_number TEXT NOT NULL,
+    prefix TEXT NOT NULL,
+    is_default INTEGER NOT NULL DEFAULT 0,
+    UNIQUE(plant_number, prefix)
+  )
+''');
 
     await _seedDefaultPlants(db);
     await _seedDefaultDepartments(db);
@@ -109,6 +119,18 @@ class DatabaseService {
       ''');
 
       await _seedDefaultDepartments(db);
+    }
+
+    if (oldVersion < 7) {
+      await db.execute('''
+    CREATE TABLE plant_unit_prefixes (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      plant_number TEXT NOT NULL,
+      prefix TEXT NOT NULL,
+      is_default INTEGER NOT NULL DEFAULT 0,
+      UNIQUE(plant_number, prefix)
+    )
+  ''');
     }
   }
 
@@ -346,5 +368,87 @@ class DatabaseService {
     final db = await database;
 
     return await db.delete('departments', where: 'id = ?', whereArgs: [id]);
+  }
+
+  Future<List<PlantUnitPrefix>> getPrefixesForPlant(String plantNumber) async {
+    final db = await database;
+
+    final maps = await db.query(
+      'plant_unit_prefixes',
+      where: 'plant_number = ?',
+      whereArgs: [plantNumber],
+      orderBy: 'is_default DESC, prefix',
+    );
+
+    return maps.map((map) => PlantUnitPrefix.fromMap(map)).toList();
+  }
+
+  Future<int> insertPlantUnitPrefix(PlantUnitPrefix prefix) async {
+    final db = await database;
+
+    return await db.transaction((txn) async {
+      // If setting as default, clear others for that plant
+      if (prefix.isDefault) {
+        await txn.update(
+          'plant_unit_prefixes',
+          {'is_default': 0},
+          where: 'plant_number = ?',
+          whereArgs: [prefix.plantNumber],
+        );
+      }
+
+      return await txn.insert('plant_unit_prefixes', {
+        'plant_number': prefix.plantNumber,
+        'prefix': prefix.prefix.toUpperCase().trim(),
+        'is_default': prefix.isDefault ? 1 : 0,
+      }, conflictAlgorithm: ConflictAlgorithm.abort);
+    });
+  }
+
+  Future<int> updatePlantUnitPrefix(PlantUnitPrefix prefix) async {
+    final db = await database;
+
+    return await db.transaction((txn) async {
+      if (prefix.isDefault) {
+        await txn.update(
+          'plant_unit_prefixes',
+          {'is_default': 0},
+          where: 'plant_number = ?',
+          whereArgs: [prefix.plantNumber],
+        );
+      }
+
+      return await txn.update(
+        'plant_unit_prefixes',
+        {
+          'prefix': prefix.prefix.toUpperCase().trim(),
+          'is_default': prefix.isDefault ? 1 : 0,
+        },
+        where: 'id = ?',
+        whereArgs: [prefix.id],
+      );
+    });
+  }
+
+  Future<int> deletePlantUnitPrefix(int id) async {
+    final db = await database;
+
+    return await db.delete(
+      'plant_unit_prefixes',
+      where: 'id = ?',
+      whereArgs: [id],
+    );
+  }
+
+  Future<bool> plantUnitPrefixExists(String plantNumber, String prefix) async {
+    final db = await database;
+
+    final result = await db.query(
+      'plant_unit_prefixes',
+      where: 'plant_number = ? AND LOWER(prefix) = ?',
+      whereArgs: [plantNumber, prefix.trim().toLowerCase()],
+    );
+
+    return result.isNotEmpty;
   }
 }

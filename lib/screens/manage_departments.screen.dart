@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import '../models/departments.dart';
+import '../models/department.dart';
 import '../services/database_service.dart';
 
 class ManageDepartmentsScreen extends StatefulWidget {
