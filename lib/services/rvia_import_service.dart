@@ -29,33 +29,10 @@ class RviaImportService {
     final file = File(path);
     final bytes = await file.readAsBytes();
 
-    String rawData;
+    final rawData = _decodeFileBytes(bytes);
+    final normalizedText = _normalizeFileText(rawData);
 
-    if (bytes.length >= 2 && bytes[0] == 0xFF && bytes[1] == 0xFE) {
-      rawData = utf16.decode(bytes);
-    } else if (bytes.length >= 2 && bytes[0] == 0xFE && bytes[1] == 0xFF) {
-      rawData = utf16.decode(bytes);
-    } else {
-      try {
-        rawData = utf8.decode(bytes);
-      } catch (_) {
-        try {
-          rawData = utf16.decode(bytes);
-        } catch (_) {
-          rawData = latin1.decode(bytes);
-        }
-      }
-    }
-
-    final normalized = rawData.replaceAll('\r\n', '\n').replaceAll('\r', '\n');
-
-    final lines = normalized
-        .split('\n')
-        .map((line) => line.trim())
-        .where((line) => line.isNotEmpty)
-        .toList();
-
-    if (lines.isEmpty) {
+    if (normalizedText.trim().isEmpty) {
       throw Exception('Selected CSV file is empty.');
     }
 
@@ -66,30 +43,77 @@ class RviaImportService {
       shouldParseNumbers: false,
     );
 
-    final headerTable = converter.convert('${lines.first}\n');
-    if (headerTable.isEmpty || headerTable.first.length < 6) {
-      throw Exception('Unable to parse RVIA header row.');
+    List<List<dynamic>> table;
+    try {
+      table = converter.convert(normalizedText);
+    } catch (e) {
+      throw Exception('Unable to parse CSV file: $e');
     }
 
-    final dataLines = lines.skip(1).toList();
+    if (table.isEmpty) {
+      throw Exception('Selected CSV file is empty.');
+    }
+
+    final headerRow = table.first;
+    if (headerRow.isEmpty) {
+      throw Exception('Unable to read header row.');
+    }
+
+    final normalizedHeaders = headerRow
+        .map((cell) => _normalizeHeader(cell.toString()))
+        .toList();
+
+    final headerIndex = <String, int>{};
+    for (int i = 0; i < normalizedHeaders.length; i++) {
+      headerIndex[normalizedHeaders[i]] = i;
+    }
+
+    final idIndex = _findHeaderIndex(headerIndex, ['id', 'rvia id']);
+    final standardIndex = _findHeaderIndex(headerIndex, ['standard']);
+    final typeIndex = _findHeaderIndex(headerIndex, ['type']);
+    final disciplineIndex = _findHeaderIndex(headerIndex, ['discipline']);
+    final descriptionIndex = _findHeaderIndex(headerIndex, ['description']);
+    final subCatIndex = _findHeaderIndex(headerIndex, ['sub cat', 'subcat']);
+
+    final missingHeaders = <String>[
+      if (idIndex == null) 'ID',
+      if (standardIndex == null) 'Standard',
+      if (typeIndex == null) 'Type',
+      if (disciplineIndex == null) 'Discipline',
+      if (descriptionIndex == null) 'Description',
+      if (subCatIndex == null) 'Sub Cat',
+    ];
+
+    if (missingHeaders.isNotEmpty) {
+      throw Exception(
+        'Unable to read headers. Missing: ${missingHeaders.join(', ')}. '
+        'Found: ${headerRow.join(', ')}',
+      );
+    }
+
     final List<RviaCode> codes = [];
 
-    for (int i = 0; i < dataLines.length; i++) {
-      final line = dataLines[i];
+    for (int i = 1; i < table.length; i++) {
+      final row = table[i];
 
-      List<List<dynamic>> parsedLine;
-      try {
-        parsedLine = converter.convert('$line\n');
-      } catch (_) {
+      if (row.every((cell) => cell.toString().trim().isEmpty)) {
         continue;
       }
 
-      if (parsedLine.isEmpty) continue;
+      final importRow = [
+        _cellAt(row, idIndex!),
+        _cellAt(row, standardIndex!),
+        _cellAt(row, subCatIndex!),
+        _cellAt(row, typeIndex!),
+        _cellAt(row, disciplineIndex!),
+        _cellAt(row, descriptionIndex!),
+      ];
 
-      final row = parsedLine.first;
-      if (row.length < 6) continue;
-
-      codes.add(RviaCode.fromImportRow(row, fallbackId: i + 1));
+      try {
+        codes.add(RviaCode.fromImportRow(importRow, fallbackId: i));
+      } catch (_) {
+        continue;
+      }
     }
 
     if (codes.isEmpty) {
@@ -99,5 +123,67 @@ class RviaImportService {
     await DatabaseService().replaceAllRviaCodes(codes);
 
     return codes.length;
+  }
+
+  String _decodeFileBytes(List<int> bytes) {
+    if (bytes.isEmpty) return '';
+
+    if (bytes.length >= 2 && bytes[0] == 0xFF && bytes[1] == 0xFE) {
+      return utf16.decode(bytes);
+    }
+
+    if (bytes.length >= 2 && bytes[0] == 0xFE && bytes[1] == 0xFF) {
+      return utf16.decode(bytes);
+    }
+
+    if (bytes.length >= 3 &&
+        bytes[0] == 0xEF &&
+        bytes[1] == 0xBB &&
+        bytes[2] == 0xBF) {
+      return utf8.decode(bytes.sublist(3), allowMalformed: true);
+    }
+
+    try {
+      return utf8.decode(bytes, allowMalformed: true);
+    } catch (_) {
+      try {
+        return utf16.decode(bytes);
+      } catch (_) {
+        return latin1.decode(bytes);
+      }
+    }
+  }
+
+  String _normalizeFileText(String input) {
+    return input
+        .replaceAll('\uFEFF', '')
+        .replaceAll('\ufeff', '')
+        .replaceAll('\r\n', '\n')
+        .replaceAll('\r', '\n');
+  }
+
+  String _normalizeHeader(String value) {
+    return value
+        .replaceAll('\uFEFF', '')
+        .replaceAll('\ufeff', '')
+        .replaceAll('"', '')
+        .replaceAll('\r', '')
+        .trim()
+        .toLowerCase();
+  }
+
+  int? _findHeaderIndex(Map<String, int> headerIndex, List<String> aliases) {
+    for (final alias in aliases) {
+      final normalized = _normalizeHeader(alias);
+      if (headerIndex.containsKey(normalized)) {
+        return headerIndex[normalized];
+      }
+    }
+    return null;
+  }
+
+  dynamic _cellAt(List<dynamic> row, int index) {
+    if (index < 0 || index >= row.length) return '';
+    return row[index];
   }
 }

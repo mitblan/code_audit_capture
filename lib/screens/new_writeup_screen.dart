@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import '../models/audit_writeup.dart';
 import '../models/departments.dart';
 import '../models/rvia_code.dart';
@@ -118,6 +119,11 @@ class _NewWriteupScreenState extends State<NewWriteupScreen> {
       setState(() {
         _departments = departments;
         _isLoadingDepartments = false;
+
+        // Only set default for NEW write-ups
+        if (_selectedDepartment == null && _departments.isNotEmpty) {
+          _selectedDepartment = _departments.first.name;
+        }
       });
     } catch (e) {
       if (!mounted) return;
@@ -283,6 +289,11 @@ class _NewWriteupScreenState extends State<NewWriteupScreen> {
           flex: 2,
           child: TextFormField(
             controller: _unitNumberController,
+            textCapitalization: TextCapitalization.characters,
+            inputFormatters: [
+              FilteringTextInputFormatter.allow(RegExp(r'[a-zA-Z0-9\- ]')),
+              UpperCaseTextFormatter(),
+            ],
             decoration: const InputDecoration(
               labelText: 'Unit',
               border: OutlineInputBorder(),
@@ -300,6 +311,11 @@ class _NewWriteupScreenState extends State<NewWriteupScreen> {
           flex: 2,
           child: TextFormField(
             controller: _modelNumberController,
+            textCapitalization: TextCapitalization.characters,
+            inputFormatters: [
+              FilteringTextInputFormatter.allow(RegExp(r'[a-zA-Z0-9\- ]')),
+              UpperCaseTextFormatter(),
+            ],
             decoration: const InputDecoration(
               labelText: 'Model',
               border: OutlineInputBorder(),
@@ -372,7 +388,19 @@ class _NewWriteupScreenState extends State<NewWriteupScreen> {
                           onChanged: (value) {
                             setState(() {
                               _repeatViolation = value;
-                              if (!value) {
+
+                              if (value) {
+                                // Turning ON → default to 1 if empty or zero
+                                final current =
+                                    int.tryParse(
+                                      _timesRepeatController.text.trim(),
+                                    ) ??
+                                    0;
+                                if (current < 1) {
+                                  _timesRepeatController.text = '1';
+                                }
+                              } else {
+                                // Turning OFF → reset to 0
                                 _timesRepeatController.text = '0';
                               }
                             });
@@ -548,6 +576,19 @@ class _NewWriteupScreenState extends State<NewWriteupScreen> {
           ),
         ),
       ),
+    );
+  }
+}
+
+class UpperCaseTextFormatter extends TextInputFormatter {
+  @override
+  TextEditingValue formatEditUpdate(
+    TextEditingValue oldValue,
+    TextEditingValue newValue,
+  ) {
+    return newValue.copyWith(
+      text: newValue.text.toUpperCase(),
+      selection: newValue.selection,
     );
   }
 }

@@ -44,12 +44,17 @@ class _SessionScreenState extends State<SessionScreen> {
         _sessionSummaries = summaries;
         _plants = plants;
 
-        // 🔥 FIX: reset selected plant if it no longer exists
         final validPlantNumbers = _plants.map((p) => p.plantNumber).toSet();
 
+        // Reset if invalid
         if (_selectedPlant != null &&
             !validPlantNumbers.contains(_selectedPlant)) {
           _selectedPlant = null;
+        }
+
+        // ✅ Default to first plant if nothing selected
+        if (_selectedPlant == null && _plants.isNotEmpty) {
+          _selectedPlant = _plants.first.plantNumber;
         }
 
         _isLoading = false;
