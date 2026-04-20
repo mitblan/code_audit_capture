@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../services/database_service.dart';
 import '../services/rvia_import_service.dart';
 import 'manage_plants_screen.dart';
+import 'manage_departments.screen.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -144,6 +145,22 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 Navigator.push(
                   context,
                   MaterialPageRoute(builder: (_) => const ManagePlantsScreen()),
+                );
+              },
+            ),
+          ),
+          const SizedBox(height: 16),
+          Card(
+            child: ListTile(
+              leading: const Icon(Icons.apartment),
+              title: const Text('Manage Departments'),
+              subtitle: const Text('Add, edit, or delete department options'),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: () {
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => const ManageDepartmentsScreen(),
+                  ),
                 );
               },
             ),

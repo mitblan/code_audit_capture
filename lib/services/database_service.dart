@@ -4,6 +4,7 @@ import '../models/audit_writeup.dart';
 import '../models/plant_session_summary.dart';
 import '../models/rvia_code.dart';
 import '../models/plant.dart';
+import '../models/departments.dart';
 
 class DatabaseService {
   static final DatabaseService _instance = DatabaseService._internal();
@@ -27,7 +28,7 @@ class DatabaseService {
 
     return await openDatabase(
       path,
-      version: 5,
+      version: 6,
       onCreate: _onCreate,
       onUpgrade: _onUpgrade,
     );
@@ -35,50 +36,58 @@ class DatabaseService {
 
   Future<void> _onCreate(Database db, int version) async {
     await db.execute('''
-    CREATE TABLE audit_writeups (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      plant_number TEXT NOT NULL,
-      date_detected TEXT NOT NULL,
-      detected_by TEXT NOT NULL,
-      unit_number TEXT NOT NULL,
-      model_number TEXT NOT NULL,
-      department TEXT NOT NULL,
-      non_conformance_no TEXT NOT NULL,
-      category TEXT NOT NULL,
-      new_code_reference TEXT NOT NULL,
-      code_class TEXT NOT NULL,
-      code_description TEXT NOT NULL,
-      repeat_violation INTEGER NOT NULL DEFAULT 0,
-      times_repeat INTEGER NOT NULL DEFAULT 0,
-      grounding INTEGER NOT NULL DEFAULT 0,
-      solar INTEGER NOT NULL DEFAULT 0,
-      panel_board INTEGER NOT NULL DEFAULT 0,
-      appliance_install INTEGER NOT NULL DEFAULT 0,
-      rvia_id INTEGER,
-      rvia_type TEXT,
-      rvia_description TEXT
-    )
-  ''');
+      CREATE TABLE audit_writeups (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        plant_number TEXT NOT NULL,
+        date_detected TEXT NOT NULL,
+        detected_by TEXT NOT NULL,
+        unit_number TEXT NOT NULL,
+        model_number TEXT NOT NULL,
+        department TEXT NOT NULL,
+        non_conformance_no TEXT NOT NULL,
+        category TEXT NOT NULL,
+        new_code_reference TEXT NOT NULL,
+        code_class TEXT NOT NULL,
+        code_description TEXT NOT NULL,
+        repeat_violation INTEGER NOT NULL DEFAULT 0,
+        times_repeat INTEGER NOT NULL DEFAULT 0,
+        grounding INTEGER NOT NULL DEFAULT 0,
+        solar INTEGER NOT NULL DEFAULT 0,
+        panel_board INTEGER NOT NULL DEFAULT 0,
+        appliance_install INTEGER NOT NULL DEFAULT 0,
+        rvia_id INTEGER,
+        rvia_type TEXT,
+        rvia_description TEXT
+      )
+    ''');
 
     await db.execute('''
-    CREATE TABLE rvia_codes (
-      rvia_id INTEGER PRIMARY KEY,
-      standard TEXT NOT NULL,
-      sub_cat TEXT NOT NULL,
-      type TEXT NOT NULL,
-      discipline TEXT NOT NULL,
-      description TEXT NOT NULL
-    )
-  ''');
+      CREATE TABLE rvia_codes (
+        rvia_id INTEGER PRIMARY KEY,
+        standard TEXT NOT NULL,
+        sub_cat TEXT NOT NULL,
+        type TEXT NOT NULL,
+        discipline TEXT NOT NULL,
+        description TEXT NOT NULL
+      )
+    ''');
 
     await db.execute('''
-    CREATE TABLE plants (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      plant_number TEXT NOT NULL UNIQUE
-    )
-  ''');
+      CREATE TABLE plants (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        plant_number TEXT NOT NULL UNIQUE
+      )
+    ''');
+
+    await db.execute('''
+      CREATE TABLE departments (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL UNIQUE
+      )
+    ''');
 
     await _seedDefaultPlants(db);
+    await _seedDefaultDepartments(db);
   }
 
   Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
@@ -86,7 +95,20 @@ class DatabaseService {
       await db.execute('DROP TABLE IF EXISTS audit_writeups');
       await db.execute('DROP TABLE IF EXISTS rvia_codes');
       await db.execute('DROP TABLE IF EXISTS plants');
+      await db.execute('DROP TABLE IF EXISTS departments');
       await _onCreate(db, newVersion);
+      return;
+    }
+
+    if (oldVersion < 6) {
+      await db.execute('''
+        CREATE TABLE departments (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          name TEXT NOT NULL UNIQUE
+        )
+      ''');
+
+      await _seedDefaultDepartments(db);
     }
   }
 
@@ -127,11 +149,11 @@ class DatabaseService {
     final db = await database;
 
     final results = await db.rawQuery('''
-    SELECT plant_number, COUNT(*) AS writeupCount
-    FROM audit_writeups
-    GROUP BY plant_number
-    ORDER BY CAST(plant_number AS INTEGER)
-  ''');
+      SELECT plant_number, COUNT(*) AS writeupCount
+      FROM audit_writeups
+      GROUP BY plant_number
+      ORDER BY CAST(plant_number AS INTEGER)
+    ''');
 
     return results.map((row) {
       return PlantSessionSummary(
@@ -210,6 +232,29 @@ class DatabaseService {
     await batch.commit(noResult: true);
   }
 
+  Future<void> _seedDefaultDepartments(Database db) async {
+    const defaultDepartments = [
+      'Floors',
+      'Plumbing',
+      'Shelling',
+      'Electrical',
+      'Metal',
+      'Slide-outs',
+      'Final',
+      'Cabinet Shop',
+    ];
+
+    final batch = db.batch();
+
+    for (final department in defaultDepartments) {
+      batch.insert('departments', {
+        'name': department,
+      }, conflictAlgorithm: ConflictAlgorithm.ignore);
+    }
+
+    await batch.commit(noResult: true);
+  }
+
   Future<List<Plant>> getAllPlants() async {
     final db = await database;
 
@@ -256,5 +301,50 @@ class DatabaseService {
     final db = await database;
 
     return await db.delete('plants', where: 'id = ?', whereArgs: [id]);
+  }
+
+  Future<List<Department>> getAllDepartments() async {
+    final db = await database;
+
+    final maps = await db.query('departments', orderBy: 'LOWER(name)');
+
+    return maps.map((map) => Department.fromMap(map)).toList();
+  }
+
+  Future<bool> departmentExists(String name) async {
+    final db = await database;
+
+    final result = await db.query(
+      'departments',
+      where: 'LOWER(name) = ?',
+      whereArgs: [name.trim().toLowerCase()],
+    );
+
+    return result.isNotEmpty;
+  }
+
+  Future<int> insertDepartment(Department department) async {
+    final db = await database;
+
+    return await db.insert('departments', {
+      'name': department.name.trim(),
+    }, conflictAlgorithm: ConflictAlgorithm.abort);
+  }
+
+  Future<int> updateDepartment(Department department) async {
+    final db = await database;
+
+    return await db.update(
+      'departments',
+      {'name': department.name.trim()},
+      where: 'id = ?',
+      whereArgs: [department.id],
+    );
+  }
+
+  Future<int> deleteDepartment(int id) async {
+    final db = await database;
+
+    return await db.delete('departments', where: 'id = ?', whereArgs: [id]);
   }
 }

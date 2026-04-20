@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../models/audit_writeup.dart';
+import '../models/departments.dart';
 import '../models/rvia_code.dart';
 import '../services/database_service.dart';
 import 'rvia_search_screen.dart';
@@ -25,6 +26,8 @@ class _NewWriteupScreenState extends State<NewWriteupScreen> {
   final TextEditingController _unitNumberController = TextEditingController();
   final TextEditingController _modelNumberController = TextEditingController();
   String? _selectedDepartment;
+  List<Department> _departments = [];
+  bool _isLoadingDepartments = true;
 
   bool _repeatViolation = false;
   final TextEditingController _timesRepeatController = TextEditingController();
@@ -48,20 +51,10 @@ class _NewWriteupScreenState extends State<NewWriteupScreen> {
 
   RviaCode? _selectedRviaCode;
 
-  static const List<String> _departments = [
-    'Floors',
-    'Plumbing',
-    'Shelling',
-    'Electrical',
-    'Metal',
-    'Slide-Outs',
-    'Final',
-    'Cabinet Shop',
-  ];
-
   @override
   void initState() {
     super.initState();
+    _loadDepartments();
 
     final existing = widget.existingWriteup;
     if (existing != null) {
@@ -114,6 +107,45 @@ class _NewWriteupScreenState extends State<NewWriteupScreen> {
     _codeDescriptionController.dispose();
 
     super.dispose();
+  }
+
+  Future<void> _loadDepartments() async {
+    try {
+      final departments = await DatabaseService().getAllDepartments();
+
+      if (!mounted) return;
+
+      setState(() {
+        _departments = departments;
+        _isLoadingDepartments = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+
+      setState(() {
+        _departments = [];
+        _isLoadingDepartments = false;
+      });
+
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Failed to load departments: $e')));
+    }
+  }
+
+  List<String> _departmentOptions() {
+    final names = _departments.map((d) => d.name).toList();
+
+    final currentValue = _selectedDepartment?.trim();
+
+    if (currentValue != null &&
+        currentValue.isNotEmpty &&
+        !names.contains(currentValue)) {
+      names.add(currentValue);
+      names.sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
+    }
+
+    return names;
   }
 
   Future<void> _searchRviaCode() async {
@@ -284,22 +316,26 @@ class _NewWriteupScreenState extends State<NewWriteupScreen> {
         Flexible(
           flex: 3,
           child: DropdownButtonFormField<String>(
-            value: _selectedDepartment,
+            value: _departmentOptions().contains(_selectedDepartment)
+                ? _selectedDepartment
+                : null,
             decoration: const InputDecoration(
               labelText: 'Department',
               border: OutlineInputBorder(),
             ),
-            items: _departments
+            items: _departmentOptions()
                 .map(
                   (dept) =>
                       DropdownMenuItem<String>(value: dept, child: Text(dept)),
                 )
                 .toList(),
-            onChanged: (value) {
-              setState(() {
-                _selectedDepartment = value;
-              });
-            },
+            onChanged: _isLoadingDepartments
+                ? null
+                : (value) {
+                    setState(() {
+                      _selectedDepartment = value;
+                    });
+                  },
             validator: (value) {
               if (value == null || value.trim().isEmpty) {
                 return 'Required';
