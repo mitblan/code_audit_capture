@@ -2,19 +2,22 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../models/audit_writeup.dart';
 import '../models/department.dart';
+import '../models/plant_product_line_option.dart';
+import '../models/plant_unit_prefix.dart';
 import '../models/rvia_code.dart';
 import '../services/database_service.dart';
 import 'rvia_search_screen.dart';
-import '../models/plant_unit_prefix.dart';
 
 class NewWriteupScreen extends StatefulWidget {
   final String plantNumber;
   final AuditWriteup? existingWriteup;
+  final AuditWriteup? carryForwardFrom;
 
   const NewWriteupScreen({
     super.key,
     required this.plantNumber,
     this.existingWriteup,
+    this.carryForwardFrom,
   });
 
   @override
@@ -24,31 +27,38 @@ class NewWriteupScreen extends StatefulWidget {
 class _NewWriteupScreenState extends State<NewWriteupScreen> {
   final GlobalKey<FormState> _formKey = GlobalKey<FormState>();
 
-  // Row 2
+  // Unit
   final TextEditingController _unitSuffixController = TextEditingController();
-  final TextEditingController _modelNumberController = TextEditingController();
-
   String? _selectedUnitPrefix;
   List<PlantUnitPrefix> _unitPrefixes = [];
   bool _isLoadingUnitPrefixes = true;
 
+  // Model
+  final TextEditingController _modelSuffixController = TextEditingController();
+  String? _selectedProductLineCode;
+  List<PlantProductLineOption> _productLines = [];
+  bool _isLoadingProductLines = true;
+
+  // Department
   String? _selectedDepartment;
   List<Department> _departments = [];
   bool _isLoadingDepartments = true;
 
+  // Repeat
   bool _repeatViolation = false;
   final TextEditingController _timesRepeatController = TextEditingController();
 
-  // Row 3
+  // Violation description
   final TextEditingController _violationDescriptionController =
       TextEditingController();
 
+  // Flags
   bool _grounding = false;
   bool _solar = false;
   bool _panelBoard = false;
   bool _applianceInstall = false;
 
-  // RVIA section
+  // RVIA
   final TextEditingController _categoryController = TextEditingController();
   final TextEditingController _codeReferenceController =
       TextEditingController();
@@ -58,15 +68,27 @@ class _NewWriteupScreenState extends State<NewWriteupScreen> {
 
   RviaCode? _selectedRviaCode;
 
+  // Pending combined values for async split after options load
+  String? _pendingInitialUnitNumber;
+  String? _pendingInitialModelNumber;
+  bool _unitInitialized = false;
+  bool _modelInitialized = false;
+
   @override
   void initState() {
     super.initState();
+
     _loadDepartments();
     _loadUnitPrefixes();
+    _loadProductLines();
 
     final existing = widget.existingWriteup;
+
     if (existing != null) {
-      _modelNumberController.text = existing.modelNumber;
+      // Edit mode
+      _pendingInitialUnitNumber = existing.unitNumber;
+      _pendingInitialModelNumber = existing.modelNumber;
+
       _selectedDepartment = existing.department.isNotEmpty
           ? existing.department
           : null;
@@ -97,14 +119,21 @@ class _NewWriteupScreenState extends State<NewWriteupScreen> {
         );
       }
     } else {
+      // New write-up
       _timesRepeatController.text = '0';
+
+      final carryForward = widget.carryForwardFrom;
+      if (carryForward != null) {
+        _pendingInitialUnitNumber = carryForward.unitNumber;
+        _pendingInitialModelNumber = carryForward.modelNumber;
+      }
     }
   }
 
   @override
   void dispose() {
     _unitSuffixController.dispose();
-    _modelNumberController.dispose();
+    _modelSuffixController.dispose();
     _timesRepeatController.dispose();
     _violationDescriptionController.dispose();
 
@@ -114,6 +143,34 @@ class _NewWriteupScreenState extends State<NewWriteupScreen> {
     _codeDescriptionController.dispose();
 
     super.dispose();
+  }
+
+  Future<void> _loadDepartments() async {
+    try {
+      final departments = await DatabaseService().getAllDepartments();
+
+      if (!mounted) return;
+
+      setState(() {
+        _departments = departments;
+        _isLoadingDepartments = false;
+
+        if (_selectedDepartment == null && _departments.isNotEmpty) {
+          _selectedDepartment = _departments.first.name;
+        }
+      });
+    } catch (e) {
+      if (!mounted) return;
+
+      setState(() {
+        _departments = [];
+        _isLoadingDepartments = false;
+      });
+
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Failed to load departments: $e')));
+    }
   }
 
   Future<void> _loadUnitPrefixes() async {
@@ -129,7 +186,7 @@ class _NewWriteupScreenState extends State<NewWriteupScreen> {
         _isLoadingUnitPrefixes = false;
       });
 
-      _initializeUnitPrefixSelection();
+      _initializeUnitSelection();
     } catch (e) {
       if (!mounted) return;
 
@@ -144,26 +201,42 @@ class _NewWriteupScreenState extends State<NewWriteupScreen> {
     }
   }
 
-  List<String> _unitPrefixOptions() {
-    final prefixes = _unitPrefixes.map((p) => p.prefix).toList();
+  Future<void> _loadProductLines() async {
+    try {
+      final productLines = await DatabaseService().getProductLinesForPlant(
+        widget.plantNumber,
+      );
 
-    final currentValue = _selectedUnitPrefix?.trim();
+      if (!mounted) return;
 
-    if (currentValue != null &&
-        currentValue.isNotEmpty &&
-        !prefixes.contains(currentValue)) {
-      prefixes.add(currentValue);
-      prefixes.sort((a, b) => a.compareTo(b));
+      setState(() {
+        _productLines = productLines;
+        _isLoadingProductLines = false;
+      });
+
+      _initializeModelSelection();
+    } catch (e) {
+      if (!mounted) return;
+
+      setState(() {
+        _productLines = [];
+        _isLoadingProductLines = false;
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to load product lines: $e')),
+      );
     }
-
-    return prefixes;
   }
 
-  void _initializeUnitPrefixSelection() {
-    final existing = widget.existingWriteup;
+  void _initializeUnitSelection() {
+    if (_unitInitialized) return;
 
-    if (existing != null) {
-      _splitExistingUnitNumber(existing.unitNumber);
+    if (_pendingInitialUnitNumber != null &&
+        _pendingInitialUnitNumber!.trim().isNotEmpty) {
+      _splitInitialUnitNumber(_pendingInitialUnitNumber!);
+      _pendingInitialUnitNumber = null;
+      _unitInitialized = true;
       return;
     }
 
@@ -178,10 +251,37 @@ class _NewWriteupScreenState extends State<NewWriteupScreen> {
             defaultPrefix?.prefix ?? _unitPrefixes.first.prefix;
       });
     }
+
+    _unitInitialized = true;
   }
 
-  void _splitExistingUnitNumber(String unitNumber) {
-    final trimmed = unitNumber.trim();
+  void _initializeModelSelection() {
+    if (_modelInitialized) return;
+
+    if (_pendingInitialModelNumber != null &&
+        _pendingInitialModelNumber!.trim().isNotEmpty) {
+      _splitInitialModelNumber(_pendingInitialModelNumber!);
+      _pendingInitialModelNumber = null;
+      _modelInitialized = true;
+      return;
+    }
+
+    if (_selectedProductLineCode == null && _productLines.isNotEmpty) {
+      final defaultLine = _productLines
+          .cast<PlantProductLineOption?>()
+          .firstWhere((p) => p?.isDefault == true, orElse: () => null);
+
+      setState(() {
+        _selectedProductLineCode =
+            defaultLine?.code ?? _productLines.first.code;
+      });
+    }
+
+    _modelInitialized = true;
+  }
+
+  void _splitInitialUnitNumber(String unitNumber) {
+    final trimmed = unitNumber.trim().toUpperCase();
 
     if (trimmed.isEmpty) return;
 
@@ -204,38 +304,32 @@ class _NewWriteupScreenState extends State<NewWriteupScreen> {
     });
   }
 
-  Future<void> _loadDepartments() async {
-    try {
-      final departments = await DatabaseService().getAllDepartments();
+  void _splitInitialModelNumber(String modelNumber) {
+    final trimmed = modelNumber.trim().toUpperCase();
 
-      if (!mounted) return;
+    if (trimmed.isEmpty) return;
 
-      setState(() {
-        _departments = departments;
-        _isLoadingDepartments = false;
+    final codes = _productLines.map((p) => p.code).toList()
+      ..sort((a, b) => b.length.compareTo(a.length));
 
-        // Only set default for NEW write-ups
-        if (_selectedDepartment == null && _departments.isNotEmpty) {
-          _selectedDepartment = _departments.first.name;
-        }
-      });
-    } catch (e) {
-      if (!mounted) return;
-
-      setState(() {
-        _departments = [];
-        _isLoadingDepartments = false;
-      });
-
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('Failed to load departments: $e')));
+    for (final code in codes) {
+      if (trimmed.startsWith(code)) {
+        setState(() {
+          _selectedProductLineCode = code;
+          _modelSuffixController.text = trimmed.substring(code.length);
+        });
+        return;
+      }
     }
+
+    setState(() {
+      _selectedProductLineCode = null;
+      _modelSuffixController.text = trimmed;
+    });
   }
 
   List<String> _departmentOptions() {
     final names = _departments.map((d) => d.name).toList();
-
     final currentValue = _selectedDepartment?.trim();
 
     if (currentValue != null &&
@@ -248,6 +342,34 @@ class _NewWriteupScreenState extends State<NewWriteupScreen> {
     return names;
   }
 
+  List<String> _unitPrefixOptions() {
+    final prefixes = _unitPrefixes.map((p) => p.prefix).toList();
+    final currentValue = _selectedUnitPrefix?.trim();
+
+    if (currentValue != null &&
+        currentValue.isNotEmpty &&
+        !prefixes.contains(currentValue)) {
+      prefixes.add(currentValue);
+      prefixes.sort();
+    }
+
+    return prefixes;
+  }
+
+  List<String> _productLineOptions() {
+    final codes = _productLines.map((p) => p.code).toList();
+    final currentValue = _selectedProductLineCode?.trim();
+
+    if (currentValue != null &&
+        currentValue.isNotEmpty &&
+        !codes.contains(currentValue)) {
+      codes.add(currentValue);
+      codes.sort();
+    }
+
+    return codes;
+  }
+
   Future<void> _searchRviaCode() async {
     final selectedCode = await Navigator.push<RviaCode>(
       context,
@@ -258,7 +380,6 @@ class _NewWriteupScreenState extends State<NewWriteupScreen> {
       setState(() {
         _selectedRviaCode = selectedCode;
 
-        // Current RVIA mapping
         _codeReferenceController.text = selectedCode.codeReference;
         _categoryController.text = selectedCode.discipline;
         _codeClassController.text = selectedCode.type;
@@ -285,8 +406,9 @@ class _NewWriteupScreenState extends State<NewWriteupScreen> {
         dateDetected: widget.existingWriteup?.dateDetected ?? DateTime.now(),
         detectedBy: widget.existingWriteup?.detectedBy ?? 'Audit',
         unitNumber:
-            '${_selectedUnitPrefix ?? ''}${_unitSuffixController.text.trim().toUpperCase()}',
-        modelNumber: _modelNumberController.text.trim(),
+            '${_selectedUnitPrefix ?? ''}${_unitSuffixController.text.trim()}',
+        modelNumber:
+            '${_selectedProductLineCode ?? ''}${_modelSuffixController.text.trim().toUpperCase()}',
         department: _selectedDepartment ?? '',
         nonConformanceNo: _violationDescriptionController.text.trim(),
         category: _categoryController.text.trim(),
@@ -381,7 +503,7 @@ class _NewWriteupScreenState extends State<NewWriteupScreen> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Flexible(
-          flex: 3,
+          flex: 4,
           child: Row(
             children: [
               Expanded(
@@ -423,9 +545,82 @@ class _NewWriteupScreenState extends State<NewWriteupScreen> {
                 child: TextFormField(
                   controller: _unitSuffixController,
                   keyboardType: TextInputType.number,
-                  inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                  inputFormatters: [
+                    FilteringTextInputFormatter.digitsOnly,
+                    LengthLimitingTextInputFormatter(6),
+                  ],
                   decoration: const InputDecoration(
                     labelText: 'Unit #',
+                    border: OutlineInputBorder(),
+                  ),
+                  validator: (value) {
+                    final text = value?.trim() ?? '';
+                    if (text.isEmpty) {
+                      return 'Required';
+                    }
+                    if (text.length != 6) {
+                      return 'Must be 6 digits';
+                    }
+                    return null;
+                  },
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(width: 8),
+        Flexible(
+          flex: 4,
+          child: Row(
+            children: [
+              Expanded(
+                flex: 2,
+                child: DropdownButtonFormField<String>(
+                  value:
+                      _productLineOptions().contains(_selectedProductLineCode)
+                      ? _selectedProductLineCode
+                      : null,
+                  decoration: const InputDecoration(
+                    labelText: 'Model Code',
+                    border: OutlineInputBorder(),
+                  ),
+                  items: _productLineOptions()
+                      .map(
+                        (code) => DropdownMenuItem<String>(
+                          value: code,
+                          child: Text(code),
+                        ),
+                      )
+                      .toList(),
+                  onChanged: _isLoadingProductLines
+                      ? null
+                      : (value) {
+                          setState(() {
+                            _selectedProductLineCode = value;
+                          });
+                        },
+                  validator: (value) {
+                    if (value == null || value.trim().isEmpty) {
+                      return 'Required';
+                    }
+                    return null;
+                  },
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                flex: 3,
+                child: TextFormField(
+                  controller: _modelSuffixController,
+                  textCapitalization: TextCapitalization.characters,
+                  inputFormatters: [
+                    FilteringTextInputFormatter.allow(
+                      RegExp(r'[a-zA-Z0-9\- ]'),
+                    ),
+                    UpperCaseTextFormatter(),
+                  ],
+                  decoration: const InputDecoration(
+                    labelText: 'Model',
                     border: OutlineInputBorder(),
                   ),
                   validator: (value) {
@@ -437,28 +632,6 @@ class _NewWriteupScreenState extends State<NewWriteupScreen> {
                 ),
               ),
             ],
-          ),
-        ),
-        const SizedBox(width: 8),
-        Flexible(
-          flex: 2,
-          child: TextFormField(
-            controller: _modelNumberController,
-            textCapitalization: TextCapitalization.characters,
-            inputFormatters: [
-              FilteringTextInputFormatter.allow(RegExp(r'[a-zA-Z0-9\- ]')),
-              UpperCaseTextFormatter(),
-            ],
-            decoration: const InputDecoration(
-              labelText: 'Model',
-              border: OutlineInputBorder(),
-            ),
-            validator: (value) {
-              if (value == null || value.trim().isEmpty) {
-                return 'Required';
-              }
-              return null;
-            },
           ),
         ),
         const SizedBox(width: 8),
@@ -523,7 +696,6 @@ class _NewWriteupScreenState extends State<NewWriteupScreen> {
                               _repeatViolation = value;
 
                               if (value) {
-                                // Turning ON → default to 1 if empty or zero
                                 final current =
                                     int.tryParse(
                                       _timesRepeatController.text.trim(),
@@ -533,7 +705,6 @@ class _NewWriteupScreenState extends State<NewWriteupScreen> {
                                   _timesRepeatController.text = '1';
                                 }
                               } else {
-                                // Turning OFF → reset to 0
                                 _timesRepeatController.text = '0';
                               }
                             });
@@ -554,6 +725,7 @@ class _NewWriteupScreenState extends State<NewWriteupScreen> {
             controller: _timesRepeatController,
             enabled: _repeatViolation,
             keyboardType: TextInputType.number,
+            inputFormatters: [FilteringTextInputFormatter.digitsOnly],
             decoration: const InputDecoration(
               labelText: 'Repeat #',
               border: OutlineInputBorder(),

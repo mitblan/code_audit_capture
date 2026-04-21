@@ -32,10 +32,17 @@ class _WriteupsScreenState extends State<WriteupsScreen> {
   }
 
   Future<void> _goToNewWriteup() async {
+    final AuditWriteup? lastWriteup = _writeups.isNotEmpty
+        ? _writeups.first
+        : null;
+
     await Navigator.push<AuditWriteup>(
       context,
       MaterialPageRoute(
-        builder: (_) => NewWriteupScreen(plantNumber: widget.plantNumber),
+        builder: (_) => NewWriteupScreen(
+          plantNumber: widget.plantNumber,
+          carryForwardFrom: lastWriteup,
+        ),
       ),
     );
 

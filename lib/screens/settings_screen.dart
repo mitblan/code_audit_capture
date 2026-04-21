@@ -3,8 +3,10 @@ import 'package:flutter/material.dart';
 import '../services/database_service.dart';
 import '../services/rvia_import_service.dart';
 import 'manage_plants_screen.dart';
-import 'manage_departments.screen.dart';
+import 'manage_departments_screen.dart';
 import 'manage_unit_prefixes_screen.dart';
+import 'manage_product_lines_screen.dart';
+import 'manage_plant_product_lines_screen.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -154,12 +156,49 @@ class _SettingsScreenState extends State<SettingsScreen> {
             child: ListTile(
               leading: const Icon(Icons.tag),
               title: const Text('Manage Unit Prefixes'),
+              subtitle: const Text(
+                'Add, edit, or delete plant-specific unit prefixes',
+              ),
               trailing: const Icon(Icons.chevron_right),
               onTap: () {
                 Navigator.push(
                   context,
                   MaterialPageRoute(
                     builder: (_) => const ManageUnitPrefixesScreen(),
+                  ),
+                );
+              },
+            ),
+          ),
+          Card(
+            child: ListTile(
+              leading: const Icon(Icons.category),
+              title: const Text('Manage Product Lines'),
+              subtitle: const Text('Add, edit, or delete product line codes'),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => const ManageProductLinesScreen(),
+                  ),
+                );
+              },
+            ),
+          ),
+          Card(
+            child: ListTile(
+              leading: const Icon(Icons.link),
+              title: const Text('Assign Product Lines to Plants'),
+              subtitle: const Text(
+                'Choose which product lines each plant can run',
+              ),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => const ManagePlantProductLinesScreen(),
                   ),
                 );
               },

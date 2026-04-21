@@ -46,13 +46,11 @@ class _SessionScreenState extends State<SessionScreen> {
 
         final validPlantNumbers = _plants.map((p) => p.plantNumber).toSet();
 
-        // Reset if invalid
         if (_selectedPlant != null &&
             !validPlantNumbers.contains(_selectedPlant)) {
           _selectedPlant = null;
         }
 
-        // ✅ Default to first plant if nothing selected
         if (_selectedPlant == null && _plants.isNotEmpty) {
           _selectedPlant = _plants.first.plantNumber;
         }
@@ -132,15 +130,68 @@ class _SessionScreenState extends State<SessionScreen> {
     }
   }
 
-  Future<void> _exportPlantPdf(String plantNumber) async {
+  Future<void> _purgeExportedWriteups() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          title: const Text('Purge Exported Write-ups'),
+          content: const Text(
+            'This will permanently delete all write-ups currently stored in the app.\n\n'
+            'Make sure you have already exported them before continuing.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(false),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(dialogContext).pop(true),
+              child: const Text('Purge'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (confirmed != true) return;
+
     try {
-      await SessionPdfExportService().exportPlantSessionPdf(plantNumber);
+      final deletedCount = await DatabaseService().deleteAllWriteups();
 
       if (!mounted) return;
 
+      await _loadSessionSummaries();
+
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('PDF generated for Plant $plantNumber')),
+        SnackBar(content: Text('Purged $deletedCount write-ups.')),
       );
+    } catch (e) {
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Purge failed: $e')));
+    }
+  }
+
+  Future<void> _exportPlantPdf(String plantNumber) async {
+    try {
+      final result = await SessionPdfExportService().exportPlantSessionPdf(
+        plantNumber,
+      );
+
+      if (!mounted) return;
+
+      if (result == null) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('PDF export cancelled.')));
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('PDF saved successfully.')),
+        );
+      }
     } catch (e) {
       if (!mounted) return;
 
@@ -186,7 +237,7 @@ class _SessionScreenState extends State<SessionScreen> {
               children: [
                 Expanded(
                   child: DropdownButtonFormField<String>(
-                    initialValue: _selectedPlant,
+                    value: _selectedPlant,
                     decoration: const InputDecoration(
                       border: OutlineInputBorder(),
                       hintText: 'Select plant',
@@ -230,6 +281,14 @@ class _SessionScreenState extends State<SessionScreen> {
                     )
                   : const Icon(Icons.file_download),
               label: const Text('Export All to Access CSV'),
+            ),
+            const SizedBox(height: 12),
+            ElevatedButton.icon(
+              onPressed: hasUnexportedWriteups && !_isExportingCsv
+                  ? _purgeExportedWriteups
+                  : null,
+              icon: const Icon(Icons.delete_forever),
+              label: const Text('Purge Exported Write-ups'),
             ),
             const SizedBox(height: 24),
             const Text(

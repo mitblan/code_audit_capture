@@ -6,6 +6,9 @@ import '../models/rvia_code.dart';
 import '../models/plant.dart';
 import '../models/department.dart';
 import '../models/plant_unit_prefix.dart';
+import '../models/product_line.dart';
+import '../models/plant_product_line.dart';
+import '../models/plant_product_line_option.dart';
 
 class DatabaseService {
   static final DatabaseService _instance = DatabaseService._internal();
@@ -29,7 +32,7 @@ class DatabaseService {
 
     return await openDatabase(
       path,
-      version: 7,
+      version: 8,
       onCreate: _onCreate,
       onUpgrade: _onUpgrade,
     );
@@ -86,15 +89,33 @@ class DatabaseService {
         name TEXT NOT NULL UNIQUE
       )
     ''');
+
     await db.execute('''
-  CREATE TABLE plant_unit_prefixes (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    plant_number TEXT NOT NULL,
-    prefix TEXT NOT NULL,
-    is_default INTEGER NOT NULL DEFAULT 0,
-    UNIQUE(plant_number, prefix)
-  )
-''');
+      CREATE TABLE plant_unit_prefixes (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        plant_number TEXT NOT NULL,
+        prefix TEXT NOT NULL,
+        is_default INTEGER NOT NULL DEFAULT 0,
+        UNIQUE(plant_number, prefix)
+      )
+    ''');
+
+    await db.execute('''
+      CREATE TABLE product_lines (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        code TEXT NOT NULL UNIQUE
+      )
+    ''');
+
+    await db.execute('''
+      CREATE TABLE plant_product_lines (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        plant_number TEXT NOT NULL,
+        product_line_id INTEGER NOT NULL,
+        is_default INTEGER NOT NULL DEFAULT 0,
+        UNIQUE(plant_number, product_line_id)
+      )
+    ''');
 
     await _seedDefaultPlants(db);
     await _seedDefaultDepartments(db);
@@ -106,6 +127,9 @@ class DatabaseService {
       await db.execute('DROP TABLE IF EXISTS rvia_codes');
       await db.execute('DROP TABLE IF EXISTS plants');
       await db.execute('DROP TABLE IF EXISTS departments');
+      await db.execute('DROP TABLE IF EXISTS plant_unit_prefixes');
+      await db.execute('DROP TABLE IF EXISTS product_lines');
+      await db.execute('DROP TABLE IF EXISTS plant_product_lines');
       await _onCreate(db, newVersion);
       return;
     }
@@ -123,14 +147,33 @@ class DatabaseService {
 
     if (oldVersion < 7) {
       await db.execute('''
-    CREATE TABLE plant_unit_prefixes (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      plant_number TEXT NOT NULL,
-      prefix TEXT NOT NULL,
-      is_default INTEGER NOT NULL DEFAULT 0,
-      UNIQUE(plant_number, prefix)
-    )
-  ''');
+        CREATE TABLE plant_unit_prefixes (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          plant_number TEXT NOT NULL,
+          prefix TEXT NOT NULL,
+          is_default INTEGER NOT NULL DEFAULT 0,
+          UNIQUE(plant_number, prefix)
+        )
+      ''');
+    }
+
+    if (oldVersion < 8) {
+      await db.execute('''
+        CREATE TABLE product_lines (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          code TEXT NOT NULL UNIQUE
+        )
+      ''');
+
+      await db.execute('''
+        CREATE TABLE plant_product_lines (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          plant_number TEXT NOT NULL,
+          product_line_id INTEGER NOT NULL,
+          is_default INTEGER NOT NULL DEFAULT 0,
+          UNIQUE(plant_number, product_line_id)
+        )
+      ''');
     }
   }
 
@@ -165,6 +208,11 @@ class DatabaseService {
     );
 
     return maps.map((map) => AuditWriteup.fromMap(map)).toList();
+  }
+
+  Future<int> deleteAllWriteups() async {
+    final db = await database;
+    return await db.delete('audit_writeups');
   }
 
   Future<List<PlantSessionSummary>> getPlantSessionSummaries() async {
@@ -387,7 +435,6 @@ class DatabaseService {
     final db = await database;
 
     return await db.transaction((txn) async {
-      // If setting as default, clear others for that plant
       if (prefix.isDefault) {
         await txn.update(
           'plant_unit_prefixes',
@@ -447,6 +494,147 @@ class DatabaseService {
       'plant_unit_prefixes',
       where: 'plant_number = ? AND LOWER(prefix) = ?',
       whereArgs: [plantNumber, prefix.trim().toLowerCase()],
+    );
+
+    return result.isNotEmpty;
+  }
+
+  Future<List<ProductLine>> getAllProductLines() async {
+    final db = await database;
+
+    final maps = await db.query('product_lines', orderBy: 'LOWER(code)');
+
+    return maps.map((map) => ProductLine.fromMap(map)).toList();
+  }
+
+  Future<int> insertProductLine(ProductLine productLine) async {
+    final db = await database;
+
+    return await db.insert('product_lines', {
+      'code': productLine.code.toUpperCase().trim(),
+    }, conflictAlgorithm: ConflictAlgorithm.abort);
+  }
+
+  Future<int> updateProductLine(ProductLine productLine) async {
+    final db = await database;
+
+    return await db.update(
+      'product_lines',
+      {'code': productLine.code.toUpperCase().trim()},
+      where: 'id = ?',
+      whereArgs: [productLine.id],
+    );
+  }
+
+  Future<int> deleteProductLine(int id) async {
+    final db = await database;
+
+    return await db.delete('product_lines', where: 'id = ?', whereArgs: [id]);
+  }
+
+  Future<bool> productLineExists(String code) async {
+    final db = await database;
+
+    final result = await db.query(
+      'product_lines',
+      where: 'LOWER(code) = ?',
+      whereArgs: [code.trim().toLowerCase()],
+    );
+
+    return result.isNotEmpty;
+  }
+
+  Future<int> assignProductLineToPlant(
+    String plantNumber,
+    int productLineId, {
+    bool isDefault = false,
+  }) async {
+    final db = await database;
+
+    return await db.transaction((txn) async {
+      if (isDefault) {
+        await txn.update(
+          'plant_product_lines',
+          {'is_default': 0},
+          where: 'plant_number = ?',
+          whereArgs: [plantNumber],
+        );
+      }
+
+      return await txn.insert('plant_product_lines', {
+        'plant_number': plantNumber,
+        'product_line_id': productLineId,
+        'is_default': isDefault ? 1 : 0,
+      }, conflictAlgorithm: ConflictAlgorithm.abort);
+    });
+  }
+
+  Future<int> updatePlantProductLine(PlantProductLine assignment) async {
+    final db = await database;
+
+    return await db.transaction((txn) async {
+      if (assignment.isDefault) {
+        await txn.update(
+          'plant_product_lines',
+          {'is_default': 0},
+          where: 'plant_number = ?',
+          whereArgs: [assignment.plantNumber],
+        );
+      }
+
+      return await txn.update(
+        'plant_product_lines',
+        {'is_default': assignment.isDefault ? 1 : 0},
+        where: 'id = ?',
+        whereArgs: [assignment.id],
+      );
+    });
+  }
+
+  Future<int> removeProductLineFromPlant(int assignmentId) async {
+    final db = await database;
+
+    return await db.delete(
+      'plant_product_lines',
+      where: 'id = ?',
+      whereArgs: [assignmentId],
+    );
+  }
+
+  Future<List<PlantProductLineOption>> getProductLinesForPlant(
+    String plantNumber,
+  ) async {
+    final db = await database;
+
+    final results = await db.rawQuery(
+      '''
+      SELECT 
+        ppl.id AS assignment_id,
+        pl.id AS product_line_id,
+        ppl.plant_number,
+        pl.code,
+        ppl.is_default
+      FROM plant_product_lines ppl
+      JOIN product_lines pl ON pl.id = ppl.product_line_id
+      WHERE ppl.plant_number = ?
+      ORDER BY ppl.is_default DESC, pl.code
+    ''',
+      [plantNumber],
+    );
+
+    return results.map((row) => PlantProductLineOption.fromMap(row)).toList();
+  }
+
+  Future<bool> plantHasProductLine(
+    String plantNumber,
+    int productLineId,
+  ) async {
+    final db = await database;
+
+    final result = await db.query(
+      'plant_product_lines',
+      where: 'plant_number = ? AND product_line_id = ?',
+      whereArgs: [plantNumber, productLineId],
     );
 
     return result.isNotEmpty;

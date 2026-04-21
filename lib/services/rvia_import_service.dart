@@ -63,32 +63,28 @@ class RviaImportService {
         .map((cell) => _normalizeHeader(cell.toString()))
         .toList();
 
-    final headerIndex = <String, int>{};
-    for (int i = 0; i < normalizedHeaders.length; i++) {
-      headerIndex[normalizedHeaders[i]] = i;
-    }
-
-    final idIndex = _findHeaderIndex(headerIndex, ['id', 'rvia id']);
-    final standardIndex = _findHeaderIndex(headerIndex, ['standard']);
-    final typeIndex = _findHeaderIndex(headerIndex, ['type']);
-    final disciplineIndex = _findHeaderIndex(headerIndex, ['discipline']);
-    final descriptionIndex = _findHeaderIndex(headerIndex, ['description']);
-    final subCatIndex = _findHeaderIndex(headerIndex, ['sub cat', 'subcat']);
-
-    final missingHeaders = <String>[
-      if (idIndex == null) 'ID',
-      if (standardIndex == null) 'Standard',
-      if (typeIndex == null) 'Type',
-      if (disciplineIndex == null) 'Discipline',
-      if (descriptionIndex == null) 'Description',
-      if (subCatIndex == null) 'Sub Cat',
+    final expectedHeaders = [
+      'id',
+      'standard',
+      'type',
+      'discipline',
+      'description',
+      'sub cat',
     ];
 
-    if (missingHeaders.isNotEmpty) {
+    if (normalizedHeaders.length < expectedHeaders.length) {
       throw Exception(
-        'Unable to read headers. Missing: ${missingHeaders.join(', ')}. '
-        'Found: ${headerRow.join(', ')}',
+        'Unable to read headers. Expected ${expectedHeaders.length} columns, found ${normalizedHeaders.length}.',
       );
+    }
+
+    for (int i = 0; i < expectedHeaders.length; i++) {
+      if (normalizedHeaders[i] != expectedHeaders[i]) {
+        throw Exception(
+          'Unexpected CSV header order. Expected: ${expectedHeaders.join(', ')}. '
+          'Found: ${normalizedHeaders.take(expectedHeaders.length).join(', ')}',
+        );
+      }
     }
 
     final List<RviaCode> codes = [];
@@ -100,16 +96,15 @@ class RviaImportService {
         continue;
       }
 
-      final importRow = [
-        _cellAt(row, idIndex!),
-        _cellAt(row, standardIndex!),
-        _cellAt(row, subCatIndex!),
-        _cellAt(row, typeIndex!),
-        _cellAt(row, disciplineIndex!),
-        _cellAt(row, descriptionIndex!),
-      ];
+      if (row.length < 6) {
+        continue;
+      }
 
       try {
+        // Pass through in the SAME ORDER as the CSV:
+        // ID, Standard, Type, Discipline, Description, Sub Cat
+        final importRow = [row[0], row[1], row[2], row[3], row[4], row[5]];
+
         codes.add(RviaCode.fromImportRow(importRow, fallbackId: i));
       } catch (_) {
         continue;
@@ -170,20 +165,5 @@ class RviaImportService {
         .replaceAll('\r', '')
         .trim()
         .toLowerCase();
-  }
-
-  int? _findHeaderIndex(Map<String, int> headerIndex, List<String> aliases) {
-    for (final alias in aliases) {
-      final normalized = _normalizeHeader(alias);
-      if (headerIndex.containsKey(normalized)) {
-        return headerIndex[normalized];
-      }
-    }
-    return null;
-  }
-
-  dynamic _cellAt(List<dynamic> row, int index) {
-    if (index < 0 || index >= row.length) return '';
-    return row[index];
   }
 }

@@ -1,19 +1,23 @@
 import 'package:flutter/material.dart';
 import '../models/plant.dart';
-import '../models/plant_unit_prefix.dart';
+import '../models/product_line.dart';
+import '../models/plant_product_line.dart';
+import '../models/plant_product_line_option.dart';
 import '../services/database_service.dart';
 
-class ManageUnitPrefixesScreen extends StatefulWidget {
-  const ManageUnitPrefixesScreen({super.key});
+class ManagePlantProductLinesScreen extends StatefulWidget {
+  const ManagePlantProductLinesScreen({super.key});
 
   @override
-  State<ManageUnitPrefixesScreen> createState() =>
-      _ManageUnitPrefixesScreenState();
+  State<ManagePlantProductLinesScreen> createState() =>
+      _ManagePlantProductLinesScreenState();
 }
 
-class _ManageUnitPrefixesScreenState extends State<ManageUnitPrefixesScreen> {
+class _ManagePlantProductLinesScreenState
+    extends State<ManagePlantProductLinesScreen> {
   List<Plant> _plants = [];
-  List<PlantUnitPrefix> _prefixes = [];
+  List<ProductLine> _allProductLines = [];
+  List<PlantProductLineOption> _assignedLines = [];
 
   String? _selectedPlant;
   bool _isLoading = true;
@@ -21,21 +25,23 @@ class _ManageUnitPrefixesScreenState extends State<ManageUnitPrefixesScreen> {
   @override
   void initState() {
     super.initState();
-    _loadPlants();
+    _loadInitialData();
   }
 
-  Future<void> _loadPlants() async {
+  Future<void> _loadInitialData() async {
     setState(() {
       _isLoading = true;
     });
 
     try {
       final plants = await DatabaseService().getAllPlants();
+      final productLines = await DatabaseService().getAllProductLines();
 
       if (!mounted) return;
 
       setState(() {
         _plants = plants;
+        _allProductLines = productLines;
 
         if (_selectedPlant == null && _plants.isNotEmpty) {
           _selectedPlant = _plants.first.plantNumber;
@@ -47,27 +53,28 @@ class _ManageUnitPrefixesScreenState extends State<ManageUnitPrefixesScreen> {
         }
       });
 
-      await _loadPrefixes();
+      await _loadAssignedLines();
     } catch (e) {
       if (!mounted) return;
 
       setState(() {
         _plants = [];
-        _prefixes = [];
+        _allProductLines = [];
+        _assignedLines = [];
         _selectedPlant = null;
         _isLoading = false;
       });
 
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(SnackBar(content: Text('Failed to load plants: $e')));
+      ).showSnackBar(SnackBar(content: Text('Failed to load data: $e')));
     }
   }
 
-  Future<void> _loadPrefixes() async {
+  Future<void> _loadAssignedLines() async {
     if (_selectedPlant == null) {
       setState(() {
-        _prefixes = [];
+        _assignedLines = [];
         _isLoading = false;
       });
       return;
@@ -78,60 +85,87 @@ class _ManageUnitPrefixesScreenState extends State<ManageUnitPrefixesScreen> {
     });
 
     try {
-      final prefixes = await DatabaseService().getPrefixesForPlant(
+      final assigned = await DatabaseService().getProductLinesForPlant(
         _selectedPlant!,
       );
 
       if (!mounted) return;
 
       setState(() {
-        _prefixes = prefixes;
+        _assignedLines = assigned;
         _isLoading = false;
       });
     } catch (e) {
       if (!mounted) return;
 
       setState(() {
-        _prefixes = [];
+        _assignedLines = [];
         _isLoading = false;
       });
 
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('Failed to load prefixes: $e')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to load assigned product lines: $e')),
+      );
     }
   }
 
-  Future<void> _showPrefixDialog({PlantUnitPrefix? existingPrefix}) async {
-    final result = await showDialog<_PrefixDialogResult>(
+  Future<void> _showAddAssignmentDialog() async {
+    if (_selectedPlant == null) return;
+
+    final assignedIds = _assignedLines.map((e) => e.productLineId).toSet();
+
+    final availableLines = _allProductLines
+        .where((line) => !assignedIds.contains(line.id))
+        .toList();
+
+    if (availableLines.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'All product lines are already assigned to this plant.',
+          ),
+        ),
+      );
+      return;
+    }
+
+    ProductLine? selectedLine = availableLines.first;
+    bool isDefault = _assignedLines.isEmpty;
+
+    final result = await showDialog<_AddPlantProductLineResult>(
       context: context,
       builder: (dialogContext) {
-        final controller = TextEditingController(
-          text: existingPrefix?.prefix ?? '',
-        );
-        bool isDefault = existingPrefix?.isDefault ?? false;
-
         return StatefulBuilder(
           builder: (dialogContext, setDialogState) {
             return AlertDialog(
-              title: Text(
-                existingPrefix == null ? 'Add Prefix' : 'Edit Prefix',
-              ),
+              title: const Text('Assign Product Line'),
               content: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  TextField(
-                    controller: controller,
-                    textCapitalization: TextCapitalization.characters,
+                  DropdownButtonFormField<ProductLine>(
+                    value: selectedLine,
                     decoration: const InputDecoration(
-                      labelText: 'Prefix',
+                      labelText: 'Product Line',
                       border: OutlineInputBorder(),
                     ),
+                    items: availableLines
+                        .map(
+                          (line) => DropdownMenuItem<ProductLine>(
+                            value: line,
+                            child: Text(line.code),
+                          ),
+                        )
+                        .toList(),
+                    onChanged: (value) {
+                      setDialogState(() {
+                        selectedLine = value;
+                      });
+                    },
                   ),
                   const SizedBox(height: 12),
                   CheckboxListTile(
                     contentPadding: EdgeInsets.zero,
-                    title: const Text('Default'),
+                    title: const Text('Default for this plant'),
                     value: isDefault,
                     onChanged: (value) {
                       setDialogState(() {
@@ -148,18 +182,16 @@ class _ManageUnitPrefixesScreenState extends State<ManageUnitPrefixesScreen> {
                 ),
                 FilledButton(
                   onPressed: () {
-                    final prefixValue = controller.text.trim().toUpperCase();
-
-                    if (prefixValue.isEmpty) return;
+                    if (selectedLine == null) return;
 
                     Navigator.of(dialogContext).pop(
-                      _PrefixDialogResult(
-                        prefix: prefixValue,
+                      _AddPlantProductLineResult(
+                        productLineId: selectedLine!.id!,
                         isDefault: isDefault,
                       ),
                     );
                   },
-                  child: const Text('Save'),
+                  child: const Text('Assign'),
                 ),
               ],
             );
@@ -171,53 +203,63 @@ class _ManageUnitPrefixesScreenState extends State<ManageUnitPrefixesScreen> {
     if (result == null || _selectedPlant == null) return;
 
     try {
-      if (existingPrefix == null) {
-        await DatabaseService().insertPlantUnitPrefix(
-          PlantUnitPrefix(
-            plantNumber: _selectedPlant!,
-            prefix: result.prefix,
-            isDefault: result.isDefault,
-          ),
-        );
-      } else {
-        await DatabaseService().updatePlantUnitPrefix(
-          existingPrefix.copyWith(
-            prefix: result.prefix,
-            isDefault: result.isDefault,
-          ),
-        );
-      }
+      await DatabaseService().assignProductLineToPlant(
+        _selectedPlant!,
+        result.productLineId,
+        isDefault: result.isDefault,
+      );
 
       if (!mounted) return;
 
-      await _loadPrefixes();
+      await _loadAssignedLines();
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            existingPrefix == null ? 'Prefix added.' : 'Prefix updated.',
-          ),
-        ),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Product line assigned.')));
     } catch (e) {
       if (!mounted) return;
 
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Prefix may already exist for this plant.'),
-        ),
+        const SnackBar(content: Text('Assignment already exists.')),
       );
     }
   }
 
-  Future<void> _deletePrefix(PlantUnitPrefix prefix) async {
+  Future<void> _setDefault(PlantProductLineOption option) async {
+    try {
+      await DatabaseService().updatePlantProductLine(
+        PlantProductLine(
+          id: option.assignmentId,
+          plantNumber: option.plantNumber,
+          productLineId: option.productLineId,
+          isDefault: true,
+        ),
+      );
+
+      if (!mounted) return;
+
+      await _loadAssignedLines();
+
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Default updated.')));
+    } catch (e) {
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Failed to update default: $e')));
+    }
+  }
+
+  Future<void> _removeAssignment(PlantProductLineOption option) async {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (dialogContext) {
         return AlertDialog(
-          title: const Text('Delete Prefix'),
+          title: const Text('Remove Product Line'),
           content: Text(
-            'Delete "${prefix.prefix}" from Plant ${prefix.plantNumber}?',
+            'Remove "${option.code}" from Plant ${option.plantNumber}?',
           ),
           actions: [
             TextButton(
@@ -226,7 +268,7 @@ class _ManageUnitPrefixesScreenState extends State<ManageUnitPrefixesScreen> {
             ),
             FilledButton(
               onPressed: () => Navigator.of(dialogContext).pop(true),
-              child: const Text('Delete'),
+              child: const Text('Remove'),
             ),
           ],
         );
@@ -236,21 +278,21 @@ class _ManageUnitPrefixesScreenState extends State<ManageUnitPrefixesScreen> {
     if (confirmed != true) return;
 
     try {
-      await DatabaseService().deletePlantUnitPrefix(prefix.id!);
+      await DatabaseService().removeProductLineFromPlant(option.assignmentId);
 
       if (!mounted) return;
 
-      await _loadPrefixes();
+      await _loadAssignedLines();
 
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(const SnackBar(content: Text('Prefix deleted.')));
+      ).showSnackBar(const SnackBar(content: Text('Assignment removed.')));
     } catch (e) {
       if (!mounted) return;
 
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('Failed to delete prefix: $e')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to remove assignment: $e')),
+      );
     }
   }
 
@@ -259,11 +301,11 @@ class _ManageUnitPrefixesScreenState extends State<ManageUnitPrefixesScreen> {
     final hasPlants = _plants.isNotEmpty;
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Manage Unit Prefixes')),
+      appBar: AppBar(title: const Text('Assign Product Lines to Plants')),
       floatingActionButton: FloatingActionButton.extended(
-        onPressed: hasPlants ? () => _showPrefixDialog() : null,
+        onPressed: hasPlants ? _showAddAssignmentDialog : null,
         icon: const Icon(Icons.add),
-        label: const Text('Add Prefix'),
+        label: const Text('Assign'),
       ),
       body: Column(
         children: [
@@ -289,7 +331,7 @@ class _ManageUnitPrefixesScreenState extends State<ManageUnitPrefixesScreen> {
                       setState(() {
                         _selectedPlant = value;
                       });
-                      await _loadPrefixes();
+                      await _loadAssignedLines();
                     },
             ),
           ),
@@ -300,32 +342,34 @@ class _ManageUnitPrefixesScreenState extends State<ManageUnitPrefixesScreen> {
                 ? const Center(
                     child: Text('No plants found. Add a plant first.'),
                   )
-                : _prefixes.isEmpty
-                ? const Center(child: Text('No prefixes found for this plant.'))
+                : _assignedLines.isEmpty
+                ? const Center(
+                    child: Text('No product lines assigned to this plant.'),
+                  )
                 : ListView.separated(
-                    itemCount: _prefixes.length,
+                    itemCount: _assignedLines.length,
                     separatorBuilder: (_, __) => const Divider(height: 1),
                     itemBuilder: (context, index) {
-                      final prefix = _prefixes[index];
+                      final option = _assignedLines[index];
 
                       return ListTile(
-                        title: Text(prefix.prefix),
-                        subtitle: prefix.isDefault
+                        title: Text(option.code),
+                        subtitle: option.isDefault
                             ? const Text('Default')
                             : null,
                         trailing: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            IconButton(
-                              icon: const Icon(Icons.edit),
-                              tooltip: 'Edit',
-                              onPressed: () =>
-                                  _showPrefixDialog(existingPrefix: prefix),
-                            ),
+                            if (!option.isDefault)
+                              IconButton(
+                                icon: const Icon(Icons.star_outline),
+                                tooltip: 'Set Default',
+                                onPressed: () => _setDefault(option),
+                              ),
                             IconButton(
                               icon: const Icon(Icons.delete),
-                              tooltip: 'Delete',
-                              onPressed: () => _deletePrefix(prefix),
+                              tooltip: 'Remove',
+                              onPressed: () => _removeAssignment(option),
                             ),
                           ],
                         ),
@@ -339,9 +383,12 @@ class _ManageUnitPrefixesScreenState extends State<ManageUnitPrefixesScreen> {
   }
 }
 
-class _PrefixDialogResult {
-  final String prefix;
+class _AddPlantProductLineResult {
+  final int productLineId;
   final bool isDefault;
 
-  const _PrefixDialogResult({required this.prefix, required this.isDefault});
+  const _AddPlantProductLineResult({
+    required this.productLineId,
+    required this.isDefault,
+  });
 }

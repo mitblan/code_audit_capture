@@ -1,15 +1,16 @@
+import 'dart:io';
 import 'dart:typed_data';
 
+import 'package:file_picker/file_picker.dart';
 import 'package:intl/intl.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
-import 'package:printing/printing.dart';
 
 import '../models/audit_writeup.dart';
 import 'database_service.dart';
 
 class SessionPdfExportService {
-  Future<void> exportPlantSessionPdf(String plantNumber) async {
+  Future<String?> exportPlantSessionPdf(String plantNumber) async {
     // Always pull fresh data
     final writeups = await DatabaseService().getWriteupsByPlant(plantNumber);
 
@@ -40,9 +41,7 @@ class SessionPdfExportService {
           for (final dept in departments) ...[
             _buildDepartmentHeader(dept),
             pw.SizedBox(height: 6),
-
             ...grouped[dept]!.map(_buildWriteupLine),
-
             pw.SizedBox(height: 12),
           ],
         ],
@@ -51,8 +50,25 @@ class SessionPdfExportService {
 
     final Uint8List bytes = await pdf.save();
 
-    // Preview / Share
-    await Printing.layoutPdf(onLayout: (format) async => bytes);
+    final fileName = _buildFileName(plantNumber);
+
+    final outputPath = await FilePicker.platform.saveFile(
+      dialogTitle: 'Save Plant $plantNumber PDF',
+      fileName: fileName,
+      type: FileType.custom,
+      allowedExtensions: ['pdf'],
+      bytes: bytes,
+    );
+
+    if (outputPath == null) {
+      return null;
+    }
+
+    // Safe fallback for platforms that return a path
+    final file = File(outputPath);
+    await file.writeAsBytes(bytes);
+
+    return outputPath;
   }
 
   // --------------------------
@@ -117,5 +133,20 @@ class SessionPdfExportService {
     if (!w.repeatViolation) return 'No';
     if (w.timesRepeat > 0) return 'Yes(${w.timesRepeat})';
     return 'Yes';
+  }
+
+  // --------------------------
+  // File name
+  // --------------------------
+
+  String _buildFileName(String plantNumber) {
+    final date = DateFormat('yyyy-MM-dd').format(DateTime.now());
+    final raw = '$plantNumber-$date-codewalk';
+    return '${_sanitizeFileName(raw)}.pdf';
+  }
+
+  // Prevent invalid characters
+  String _sanitizeFileName(String input) {
+    return input.replaceAll(RegExp(r'[\\/:*?"<>|]'), '');
   }
 }

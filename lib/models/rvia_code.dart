@@ -30,14 +30,14 @@ class RviaCode {
       standard: (row['Standard'] ?? row['standard'] ?? '')
           .replaceAll('\ufeff', '')
           .trim(),
-      subCat: (row['Sub Cat'] ?? row['sub_cat'] ?? '')
-          .replaceAll('\ufeff', '')
-          .trim(),
       type: (row['Type'] ?? row['type'] ?? '').replaceAll('\ufeff', '').trim(),
       discipline: (row['Discipline'] ?? row['discipline'] ?? '')
           .replaceAll('\ufeff', '')
           .trim(),
       description: (row['Description'] ?? row['description'] ?? '')
+          .replaceAll('\ufeff', '')
+          .trim(),
+      subCat: (row['Sub Cat'] ?? row['sub_cat'] ?? '')
           .replaceAll('\ufeff', '')
           .trim(),
     );
