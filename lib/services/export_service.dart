@@ -1,18 +1,102 @@
 import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:csv/csv.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart';
+import 'package:intl/intl.dart';
 
 import '../models/audit_writeup.dart';
 import 'database_service.dart';
 
 class ExportService {
   Future<String?> exportAllWriteupsToCsv() async {
-    final List<AuditWriteup> writeups = await DatabaseService()
-        .getAllWriteups();
+    final databaseService = DatabaseService();
+    final List<AuditWriteup> writeups = await databaseService
+        .getWriteupsPendingDbExport();
 
+    if (writeups.isEmpty) {
+      throw Exception('No unexported writeups found for DBImport export.');
+    }
+
+    final String csvData = _buildCsv(writeups);
+    final String fileName = _buildLegacyFileName();
+    String? savedPath;
+
+    if (kIsWeb) {
+      throw UnsupportedError('CSV export is not configured for web.');
+    }
+
+    // Mobile platforms need bytes passed directly into saveFile.
+    if (Platform.isAndroid || Platform.isIOS) {
+      final bytes = Uint8List.fromList(utf8.encode(csvData));
+
+      savedPath = await FilePicker.platform.saveFile(
+        dialogTitle: 'Save Code Audit Export',
+        fileName: fileName,
+        type: FileType.custom,
+        allowedExtensions: ['csv'],
+        bytes: bytes,
+      );
+    } else {
+      // Desktop platforms can return a path which we then write to.
+      final String? outputPath = await FilePicker.platform.saveFile(
+        dialogTitle: 'Save Code Audit Export',
+        fileName: fileName,
+        type: FileType.custom,
+        allowedExtensions: ['csv'],
+        lockParentWindow: true,
+      );
+
+      if (outputPath == null) {
+        return null;
+      }
+
+      final file = File(outputPath);
+      await file.writeAsString(csvData);
+      savedPath = outputPath;
+    }
+
+    if (savedPath != null) {
+      final ids = writeups
+          .where((writeup) => writeup.id != null)
+          .map((writeup) => writeup.id!)
+          .toList();
+
+      await databaseService.markWriteupsDbExported(ids);
+    }
+
+    return savedPath;
+  }
+
+  Future<String> exportAllWriteupsToFolder(String folderPath) async {
+    final databaseService = DatabaseService();
+    final List<AuditWriteup> writeups = await databaseService
+        .getWriteupsPendingDbExport();
+
+    if (writeups.isEmpty) {
+      throw Exception('No unexported writeups found for DBImport export.');
+    }
+
+    final String csvData = _buildCsv(writeups);
+    final String fileName = _buildDbImportFileName();
+    final String fullPath = '$folderPath/$fileName';
+
+    final file = File(fullPath);
+    await file.writeAsString(csvData);
+
+    final ids = writeups
+        .where((writeup) => writeup.id != null)
+        .map((writeup) => writeup.id!)
+        .toList();
+
+    await databaseService.markWriteupsDbExported(ids);
+
+    return file.path;
+  }
+
+  String _buildCsv(List<AuditWriteup> writeups) {
     final List<List<dynamic>> rows = [
       [
         'Plant #',
@@ -57,46 +141,7 @@ class ExportService {
       ]);
     }
 
-    final String csvData = const ListToCsvConverter().convert(rows);
-    final String fileName =
-        'code_audit_export_${_buildTimestampForFileName(DateTime.now())}.csv';
-
-    if (kIsWeb) {
-      throw UnsupportedError('CSV export is not configured for web.');
-    }
-
-    // Mobile platforms need bytes passed directly into saveFile.
-    if (Platform.isAndroid || Platform.isIOS) {
-      final bytes = Uint8List.fromList(utf8.encode(csvData));
-
-      final String? savedPath = await FilePicker.platform.saveFile(
-        dialogTitle: 'Save Code Audit Export',
-        fileName: fileName,
-        type: FileType.custom,
-        allowedExtensions: ['csv'],
-        bytes: bytes,
-      );
-
-      return savedPath;
-    }
-
-    // Desktop platforms can return a path which we then write to.
-    final String? outputPath = await FilePicker.platform.saveFile(
-      dialogTitle: 'Save Code Audit Export',
-      fileName: fileName,
-      type: FileType.custom,
-      allowedExtensions: ['csv'],
-      lockParentWindow: true,
-    );
-
-    if (outputPath == null) {
-      return null;
-    }
-
-    final file = File(outputPath);
-    await file.writeAsString(csvData);
-
-    return outputPath;
+    return const ListToCsvConverter().convert(rows);
   }
 
   String _formatAccessDate(DateTime date) {
@@ -118,6 +163,15 @@ class ExportService {
     final minute = dateTime.minute.toString().padLeft(2, '0');
     final second = dateTime.second.toString().padLeft(2, '0');
 
-    return '${year}${month}${day}_${hour}${minute}${second}';
+    return '${year}${month}${day}_$hour$minute$second';
+  }
+
+  String _buildLegacyFileName() {
+    return 'code_audit_export_${_buildTimestampForFileName(DateTime.now())}.csv';
+  }
+
+  String _buildDbImportFileName() {
+    final date = DateFormat('yyyy-MM-dd').format(DateTime.now());
+    return 'DBImport($date).csv';
   }
 }

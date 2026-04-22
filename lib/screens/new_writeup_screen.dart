@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+
 import '../models/audit_writeup.dart';
 import '../models/department.dart';
 import '../models/plant_product_line_option.dart';
@@ -136,12 +137,10 @@ class _NewWriteupScreenState extends State<NewWriteupScreen> {
     _modelSuffixController.dispose();
     _timesRepeatController.dispose();
     _violationDescriptionController.dispose();
-
     _categoryController.dispose();
     _codeReferenceController.dispose();
     _codeClassController.dispose();
     _codeDescriptionController.dispose();
-
     super.dispose();
   }
 
@@ -379,7 +378,6 @@ class _NewWriteupScreenState extends State<NewWriteupScreen> {
     if (selectedCode != null) {
       setState(() {
         _selectedRviaCode = selectedCode;
-
         _codeReferenceController.text = selectedCode.codeReference;
         _categoryController.text = selectedCode.discipline;
         _codeClassController.text = selectedCode.type;
@@ -499,163 +497,35 @@ class _NewWriteupScreenState extends State<NewWriteupScreen> {
   }
 
   Widget _buildRowTwo() {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
+    final screenWidth = MediaQuery.of(context).size.width;
+    final isPortraitCompact = screenWidth < 900;
+
+    final unitField = Row(
       children: [
-        Flexible(
-          flex: 4,
-          child: Row(
-            children: [
-              Expanded(
-                flex: 2,
-                child: DropdownButtonFormField<String>(
-                  value: _unitPrefixOptions().contains(_selectedUnitPrefix)
-                      ? _selectedUnitPrefix
-                      : null,
-                  decoration: const InputDecoration(
-                    labelText: 'Prefix',
-                    border: OutlineInputBorder(),
-                  ),
-                  items: _unitPrefixOptions()
-                      .map(
-                        (prefix) => DropdownMenuItem<String>(
-                          value: prefix,
-                          child: Text(prefix),
-                        ),
-                      )
-                      .toList(),
-                  onChanged: _isLoadingUnitPrefixes
-                      ? null
-                      : (value) {
-                          setState(() {
-                            _selectedUnitPrefix = value;
-                          });
-                        },
-                  validator: (value) {
-                    if (value == null || value.trim().isEmpty) {
-                      return 'Required';
-                    }
-                    return null;
-                  },
-                ),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                flex: 3,
-                child: TextFormField(
-                  controller: _unitSuffixController,
-                  keyboardType: TextInputType.number,
-                  inputFormatters: [
-                    FilteringTextInputFormatter.digitsOnly,
-                    LengthLimitingTextInputFormatter(6),
-                  ],
-                  decoration: const InputDecoration(
-                    labelText: 'Unit #',
-                    border: OutlineInputBorder(),
-                  ),
-                  validator: (value) {
-                    final text = value?.trim() ?? '';
-                    if (text.isEmpty) {
-                      return 'Required';
-                    }
-                    if (text.length != 6) {
-                      return 'Must be 6 digits';
-                    }
-                    return null;
-                  },
-                ),
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(width: 8),
-        Flexible(
-          flex: 4,
-          child: Row(
-            children: [
-              Expanded(
-                flex: 2,
-                child: DropdownButtonFormField<String>(
-                  value:
-                      _productLineOptions().contains(_selectedProductLineCode)
-                      ? _selectedProductLineCode
-                      : null,
-                  decoration: const InputDecoration(
-                    labelText: 'Model Code',
-                    border: OutlineInputBorder(),
-                  ),
-                  items: _productLineOptions()
-                      .map(
-                        (code) => DropdownMenuItem<String>(
-                          value: code,
-                          child: Text(code),
-                        ),
-                      )
-                      .toList(),
-                  onChanged: _isLoadingProductLines
-                      ? null
-                      : (value) {
-                          setState(() {
-                            _selectedProductLineCode = value;
-                          });
-                        },
-                  validator: (value) {
-                    if (value == null || value.trim().isEmpty) {
-                      return 'Required';
-                    }
-                    return null;
-                  },
-                ),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                flex: 3,
-                child: TextFormField(
-                  controller: _modelSuffixController,
-                  textCapitalization: TextCapitalization.characters,
-                  inputFormatters: [
-                    FilteringTextInputFormatter.allow(
-                      RegExp(r'[a-zA-Z0-9\- ]'),
-                    ),
-                    UpperCaseTextFormatter(),
-                  ],
-                  decoration: const InputDecoration(
-                    labelText: 'Model',
-                    border: OutlineInputBorder(),
-                  ),
-                  validator: (value) {
-                    if (value == null || value.trim().isEmpty) {
-                      return 'Required';
-                    }
-                    return null;
-                  },
-                ),
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(width: 8),
-        Flexible(
-          flex: 3,
+        Expanded(
+          flex: 2,
           child: DropdownButtonFormField<String>(
-            value: _departmentOptions().contains(_selectedDepartment)
-                ? _selectedDepartment
+            isExpanded: true,
+            value: _unitPrefixOptions().contains(_selectedUnitPrefix)
+                ? _selectedUnitPrefix
                 : null,
             decoration: const InputDecoration(
-              labelText: 'Department',
+              labelText: 'Prefix',
               border: OutlineInputBorder(),
             ),
-            items: _departmentOptions()
+            items: _unitPrefixOptions()
                 .map(
-                  (dept) =>
-                      DropdownMenuItem<String>(value: dept, child: Text(dept)),
+                  (prefix) => DropdownMenuItem<String>(
+                    value: prefix,
+                    child: Text(prefix, overflow: TextOverflow.ellipsis),
+                  ),
                 )
                 .toList(),
-            onChanged: _isLoadingDepartments
+            onChanged: _isLoadingUnitPrefixes
                 ? null
                 : (value) {
                     setState(() {
-                      _selectedDepartment = value;
+                      _selectedUnitPrefix = value;
                     });
                   },
             validator: (value) {
@@ -667,80 +537,219 @@ class _NewWriteupScreenState extends State<NewWriteupScreen> {
           ),
         ),
         const SizedBox(width: 8),
-        Flexible(
-          flex: 2,
-          child: SizedBox(
-            height: 50,
-            child: DecoratedBox(
-              decoration: BoxDecoration(
-                border: Border.all(color: Colors.grey.shade400),
-                borderRadius: BorderRadius.circular(4),
-              ),
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 12),
-                child: Row(
-                  children: [
-                    const Expanded(
-                      child: Text('Repeat', style: TextStyle(fontSize: 16)),
-                    ),
-                    Align(
-                      alignment: Alignment.centerRight,
-                      child: Transform.scale(
-                        scale: 0.68,
-                        child: Switch(
-                          materialTapTargetSize:
-                              MaterialTapTargetSize.shrinkWrap,
-                          value: _repeatViolation,
-                          onChanged: (value) {
-                            setState(() {
-                              _repeatViolation = value;
-
-                              if (value) {
-                                final current =
-                                    int.tryParse(
-                                      _timesRepeatController.text.trim(),
-                                    ) ??
-                                    0;
-                                if (current < 1) {
-                                  _timesRepeatController.text = '1';
-                                }
-                              } else {
-                                _timesRepeatController.text = '0';
-                              }
-                            });
-                          },
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-        ),
-        const SizedBox(width: 8),
-        Flexible(
-          flex: 1,
+        Expanded(
+          flex: 3,
           child: TextFormField(
-            controller: _timesRepeatController,
-            enabled: _repeatViolation,
+            controller: _unitSuffixController,
             keyboardType: TextInputType.number,
-            inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+            inputFormatters: [
+              FilteringTextInputFormatter.digitsOnly,
+              LengthLimitingTextInputFormatter(6),
+            ],
             decoration: const InputDecoration(
-              labelText: 'Repeat #',
+              labelText: 'Unit #',
               border: OutlineInputBorder(),
             ),
             validator: (value) {
-              if (_repeatViolation) {
-                final parsed = int.tryParse((value ?? '').trim());
-                if (parsed == null || parsed < 1) {
-                  return 'Required';
-                }
+              final text = value?.trim() ?? '';
+              if (text.isEmpty) {
+                return 'Required';
+              }
+              if (text.length != 6) {
+                return 'Must be 6 digits';
               }
               return null;
             },
           ),
         ),
+      ],
+    );
+
+    final modelField = Row(
+      children: [
+        Expanded(
+          flex: 2,
+          child: DropdownButtonFormField<String>(
+            isExpanded: true,
+            value: _productLineOptions().contains(_selectedProductLineCode)
+                ? _selectedProductLineCode
+                : null,
+            decoration: const InputDecoration(
+              labelText: 'Model Code',
+              border: OutlineInputBorder(),
+            ),
+            items: _productLineOptions()
+                .map(
+                  (code) => DropdownMenuItem<String>(
+                    value: code,
+                    child: Text(code, overflow: TextOverflow.ellipsis),
+                  ),
+                )
+                .toList(),
+            onChanged: _isLoadingProductLines
+                ? null
+                : (value) {
+                    setState(() {
+                      _selectedProductLineCode = value;
+                    });
+                  },
+            validator: (value) {
+              if (value == null || value.trim().isEmpty) {
+                return 'Required';
+              }
+              return null;
+            },
+          ),
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          flex: 3,
+          child: TextFormField(
+            controller: _modelSuffixController,
+            textCapitalization: TextCapitalization.characters,
+            inputFormatters: [
+              FilteringTextInputFormatter.allow(RegExp(r'[a-zA-Z0-9\- ]')),
+              UpperCaseTextFormatter(),
+            ],
+            decoration: const InputDecoration(
+              labelText: 'Model',
+              border: OutlineInputBorder(),
+            ),
+            validator: (value) {
+              if (value == null || value.trim().isEmpty) {
+                return 'Required';
+              }
+              return null;
+            },
+          ),
+        ),
+      ],
+    );
+
+    final departmentField = DropdownButtonFormField<String>(
+      isExpanded: true,
+      value: _departmentOptions().contains(_selectedDepartment)
+          ? _selectedDepartment
+          : null,
+      decoration: const InputDecoration(
+        labelText: 'Department',
+        border: OutlineInputBorder(),
+      ),
+      items: _departmentOptions()
+          .map(
+            (dept) => DropdownMenuItem<String>(
+              value: dept,
+              child: Text(dept, overflow: TextOverflow.ellipsis),
+            ),
+          )
+          .toList(),
+      onChanged: _isLoadingDepartments
+          ? null
+          : (value) {
+              setState(() {
+                _selectedDepartment = value;
+              });
+            },
+      validator: (value) {
+        if (value == null || value.trim().isEmpty) {
+          return 'Required';
+        }
+        return null;
+      },
+    );
+
+    final repeatSwitchField = SizedBox(
+      height: 56,
+      child: InputDecorator(
+        decoration: const InputDecoration(
+          labelText: 'Repeat',
+          border: OutlineInputBorder(),
+          contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+        ),
+        child: Row(
+          children: [
+            const Expanded(
+              child: Text('Repeat', overflow: TextOverflow.ellipsis),
+            ),
+            Transform.scale(
+              scale: 0.8,
+              child: Switch(
+                materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                value: _repeatViolation,
+                onChanged: (value) {
+                  setState(() {
+                    _repeatViolation = value;
+
+                    if (value) {
+                      final current =
+                          int.tryParse(_timesRepeatController.text.trim()) ?? 0;
+                      if (current < 1) {
+                        _timesRepeatController.text = '1';
+                      }
+                    } else {
+                      _timesRepeatController.text = '0';
+                    }
+                  });
+                },
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+
+    final repeatCountField = TextFormField(
+      controller: _timesRepeatController,
+      enabled: _repeatViolation,
+      keyboardType: TextInputType.number,
+      inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+      decoration: const InputDecoration(
+        labelText: 'Repeat #',
+        border: OutlineInputBorder(),
+      ),
+      validator: (value) {
+        if (_repeatViolation) {
+          final parsed = int.tryParse((value ?? '').trim());
+          if (parsed == null || parsed < 1) {
+            return 'Required';
+          }
+        }
+        return null;
+      },
+    );
+
+    if (isPortraitCompact) {
+      return Column(
+        children: [
+          unitField,
+          const SizedBox(height: 12),
+          modelField,
+          const SizedBox(height: 12),
+          departmentField,
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(flex: 2, child: repeatSwitchField),
+              const SizedBox(width: 8),
+              Expanded(child: repeatCountField),
+            ],
+          ),
+        ],
+      );
+    }
+
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Expanded(flex: 4, child: unitField),
+        const SizedBox(width: 8),
+        Expanded(flex: 4, child: modelField),
+        const SizedBox(width: 8),
+        Expanded(flex: 3, child: departmentField),
+        const SizedBox(width: 8),
+        Expanded(flex: 2, child: repeatSwitchField),
+        const SizedBox(width: 8),
+        Expanded(child: repeatCountField),
       ],
     );
   }

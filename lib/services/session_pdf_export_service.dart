@@ -11,21 +11,22 @@ import 'database_service.dart';
 
 class SessionPdfExportService {
   Future<String?> exportPlantSessionPdf(String plantNumber) async {
-    // Always pull fresh data
-    final writeups = await DatabaseService().getWriteupsByPlant(plantNumber);
+    final databaseService = DatabaseService();
+
+    final writeups = await databaseService.getWriteupsPendingPdfExportByPlant(
+      plantNumber,
+    );
 
     if (writeups.isEmpty) {
-      throw Exception('No writeups found for plant $plantNumber');
+      throw Exception('No unexported writeups found for plant $plantNumber.');
     }
 
-    // Group by department
     final Map<String, List<AuditWriteup>> grouped = {};
 
     for (final w in writeups) {
       grouped.putIfAbsent(w.department, () => []).add(w);
     }
 
-    // Sort departments
     final departments = grouped.keys.toList()..sort();
 
     final pdf = pw.Document();
@@ -36,8 +37,6 @@ class SessionPdfExportService {
         build: (context) => [
           _buildHeader(plantNumber),
           pw.SizedBox(height: 16),
-
-          // Department sections
           for (final dept in departments) ...[
             _buildDepartmentHeader(dept),
             pw.SizedBox(height: 6),
@@ -49,7 +48,6 @@ class SessionPdfExportService {
     );
 
     final Uint8List bytes = await pdf.save();
-
     final fileName = _buildFileName(plantNumber);
 
     final outputPath = await FilePicker.platform.saveFile(
@@ -64,16 +62,18 @@ class SessionPdfExportService {
       return null;
     }
 
-    // Safe fallback for platforms that return a path
     final file = File(outputPath);
     await file.writeAsBytes(bytes);
 
+    final ids = writeups
+        .where((writeup) => writeup.id != null)
+        .map((writeup) => writeup.id!)
+        .toList();
+
+    await databaseService.markWriteupsPdfExportedByIds(ids);
+
     return outputPath;
   }
-
-  // --------------------------
-  // Widgets
-  // --------------------------
 
   pw.Widget _buildHeader(String plantNumber) {
     final date = DateFormat('MM/dd/yy').format(DateTime.now());
@@ -135,17 +135,12 @@ class SessionPdfExportService {
     return 'Yes';
   }
 
-  // --------------------------
-  // File name
-  // --------------------------
-
   String _buildFileName(String plantNumber) {
     final date = DateFormat('yyyy-MM-dd').format(DateTime.now());
     final raw = '$plantNumber-$date-codewalk';
     return '${_sanitizeFileName(raw)}.pdf';
   }
 
-  // Prevent invalid characters
   String _sanitizeFileName(String input) {
     return input.replaceAll(RegExp(r'[\\/:*?"<>|]'), '');
   }

@@ -33,6 +33,11 @@ class AuditWriteup {
   final String? rviaType;
   final String? rviaDescription;
 
+  // Export Tracking Flags
+  final bool pdfExported;
+  final bool dbExported;
+  final bool ccExported;
+
   AuditWriteup({
     this.id,
     required this.plantNumber,
@@ -55,6 +60,9 @@ class AuditWriteup {
     this.rviaId,
     this.rviaType,
     this.rviaDescription,
+    this.pdfExported = false,
+    this.dbExported = false,
+    this.ccExported = false,
   });
 
   Map<String, dynamic> toMap() {
@@ -80,6 +88,9 @@ class AuditWriteup {
       'rvia_id': rviaId,
       'rvia_type': rviaType,
       'rvia_description': rviaDescription,
+      'pdf_exported': pdfExported ? 1 : 0,
+      'db_exported': dbExported ? 1 : 0,
+      'cc_exported': ccExported ? 1 : 0,
     };
   }
 
@@ -106,6 +117,9 @@ class AuditWriteup {
       rviaId: map['rvia_id'] as int?,
       rviaType: map['rvia_type'] as String?,
       rviaDescription: map['rvia_description'] as String?,
+      pdfExported: (map['pdf_exported'] ?? 0) == 1,
+      dbExported: (map['db_exported'] ?? 0) == 1,
+      ccExported: (map['cc_exported'] ?? 0) == 1,
     );
   }
 }

@@ -14,6 +14,9 @@ class _RviaSearchScreenState extends State<RviaSearchScreen> {
 
   List<RviaCode> _allCodes = [];
   List<RviaCode> _filteredCodes = [];
+  List<String> _categories = ['All'];
+
+  String _selectedCategory = 'All';
   bool _isLoading = true;
 
   @override
@@ -36,8 +39,17 @@ class _RviaSearchScreenState extends State<RviaSearchScreen> {
 
       if (!mounted) return;
 
+      final categories =
+          codes
+              .map((code) => code.discipline.trim())
+              .where((category) => category.isNotEmpty)
+              .toSet()
+              .toList()
+            ..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
+
       setState(() {
         _allCodes = codes;
+        _categories = ['All', ...categories];
         _filteredCodes = codes;
         _isLoading = false;
       });
@@ -57,22 +69,59 @@ class _RviaSearchScreenState extends State<RviaSearchScreen> {
   void _applyFilter() {
     final query = _searchController.text.trim().toLowerCase();
 
-    setState(() {
-      if (query.isEmpty) {
-        _filteredCodes = _allCodes;
-      } else {
-        _filteredCodes = _allCodes.where((code) {
-          return code.codeReference.toLowerCase().contains(query) ||
-              code.discipline.toLowerCase().contains(query) ||
-              code.description.toLowerCase().contains(query) ||
-              code.type.toLowerCase().contains(query);
-        }).toList();
+    List<RviaCode> filtered = _allCodes;
+
+    if (_selectedCategory != 'All') {
+      filtered = filtered
+          .where(
+            (code) =>
+                code.discipline.trim().toLowerCase() ==
+                _selectedCategory.toLowerCase(),
+          )
+          .toList();
+    }
+
+    if (query.isNotEmpty) {
+      filtered = filtered.where((code) {
+        final searchableText = [
+          code.codeReference,
+          code.standard,
+          code.subCat,
+          code.type,
+          code.discipline,
+          code.description,
+        ].join(' ').toLowerCase();
+
+        return searchableText.contains(query);
+      }).toList();
+    }
+
+    filtered.sort((a, b) {
+      final aCode = a.codeReference.toLowerCase();
+      final bCode = b.codeReference.toLowerCase();
+
+      final aStarts = aCode.startsWith(query);
+      final bStarts = bCode.startsWith(query);
+
+      if (query.isNotEmpty && aStarts != bStarts) {
+        return aStarts ? -1 : 1;
       }
+
+      return aCode.compareTo(bCode);
+    });
+
+    setState(() {
+      _filteredCodes = filtered;
     });
   }
 
   void _selectCode(RviaCode code) {
     Navigator.pop(context, code);
+  }
+
+  void _clearSearch() {
+    _searchController.clear();
+    _applyFilter();
   }
 
   @override
@@ -83,12 +132,43 @@ class _RviaSearchScreenState extends State<RviaSearchScreen> {
         padding: const EdgeInsets.all(12),
         child: Column(
           children: [
+            DropdownButtonFormField<String>(
+              value: _categories.contains(_selectedCategory)
+                  ? _selectedCategory
+                  : 'All',
+              decoration: const InputDecoration(
+                labelText: 'Category',
+                border: OutlineInputBorder(),
+              ),
+              items: _categories
+                  .map(
+                    (category) => DropdownMenuItem<String>(
+                      value: category,
+                      child: Text(category, overflow: TextOverflow.ellipsis),
+                    ),
+                  )
+                  .toList(),
+              onChanged: (value) {
+                setState(() {
+                  _selectedCategory = value ?? 'All';
+                });
+                _applyFilter();
+              },
+            ),
+            const SizedBox(height: 12),
             TextField(
               controller: _searchController,
-              decoration: const InputDecoration(
-                labelText: 'Search code, discipline, or description',
-                border: OutlineInputBorder(),
-                prefixIcon: Icon(Icons.search),
+              decoration: InputDecoration(
+                labelText: 'Search code, type, category, or description',
+                border: const OutlineInputBorder(),
+                prefixIcon: const Icon(Icons.search),
+                suffixIcon: _searchController.text.isEmpty
+                    ? null
+                    : IconButton(
+                        onPressed: _clearSearch,
+                        icon: const Icon(Icons.clear),
+                        tooltip: 'Clear search',
+                      ),
               ),
             ),
             const SizedBox(height: 12),
@@ -105,12 +185,31 @@ class _RviaSearchScreenState extends State<RviaSearchScreen> {
                         return Card(
                           margin: const EdgeInsets.symmetric(vertical: 4),
                           child: ListTile(
-                            title: Text(code.codeReference),
-                            subtitle: Text(
-                              '${code.discipline}\n${code.description}',
+                            contentPadding: const EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 8,
                             ),
-                            isThreeLine: true,
-                            trailing: Text(code.type),
+                            title: Text(
+                              '${code.codeReference}  •  ${code.type}',
+                              style: const TextStyle(
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                            subtitle: Padding(
+                              padding: const EdgeInsets.only(top: 4),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(code.discipline),
+                                  const SizedBox(height: 2),
+                                  Text(
+                                    code.description,
+                                    maxLines: 2,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ],
+                              ),
+                            ),
                             onTap: () => _selectCode(code),
                           ),
                         );

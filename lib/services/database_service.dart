@@ -32,7 +32,7 @@ class DatabaseService {
 
     return await openDatabase(
       path,
-      version: 8,
+      version: 9,
       onCreate: _onCreate,
       onUpgrade: _onUpgrade,
     );
@@ -61,7 +61,10 @@ class DatabaseService {
         appliance_install INTEGER NOT NULL DEFAULT 0,
         rvia_id INTEGER,
         rvia_type TEXT,
-        rvia_description TEXT
+        rvia_description TEXT,
+        pdf_exported INTEGER NOT NULL DEFAULT 0,
+        db_exported INTEGER NOT NULL DEFAULT 0,
+        cc_exported INTEGER NOT NULL DEFAULT 0
       )
     ''');
 
@@ -175,6 +178,23 @@ class DatabaseService {
         )
       ''');
     }
+
+    if (oldVersion < 9) {
+      await db.execute('''
+        ALTER TABLE audit_writeups
+        ADD COLUMN pdf_exported INTEGER NOT NULL DEFAULT 0
+      ''');
+
+      await db.execute('''
+        ALTER TABLE audit_writeups
+        ADD COLUMN db_exported INTEGER NOT NULL DEFAULT 0
+      ''');
+
+      await db.execute('''
+        ALTER TABLE audit_writeups
+        ADD COLUMN cc_exported INTEGER NOT NULL DEFAULT 0
+      ''');
+    }
   }
 
   Future<int> insertWriteup(AuditWriteup writeup) async {
@@ -199,6 +219,21 @@ class DatabaseService {
     return maps.map((map) => AuditWriteup.fromMap(map)).toList();
   }
 
+  Future<List<AuditWriteup>> getWriteupsPendingPdfExportByPlant(
+    String plantNumber,
+  ) async {
+    final db = await database;
+
+    final List<Map<String, dynamic>> maps = await db.query(
+      'audit_writeups',
+      where: 'plant_number = ? AND pdf_exported = ?',
+      whereArgs: [plantNumber, 0],
+      orderBy: 'date_detected DESC',
+    );
+
+    return maps.map((map) => AuditWriteup.fromMap(map)).toList();
+  }
+
   Future<List<AuditWriteup>> getAllWriteups() async {
     final db = await database;
 
@@ -210,27 +245,178 @@ class DatabaseService {
     return maps.map((map) => AuditWriteup.fromMap(map)).toList();
   }
 
+  Future<List<AuditWriteup>> getWriteupsPendingDbExport() async {
+    final db = await database;
+
+    final List<Map<String, dynamic>> maps = await db.query(
+      'audit_writeups',
+      where: 'db_exported = ?',
+      whereArgs: [0],
+      orderBy: 'date_detected DESC',
+    );
+
+    return maps.map((map) => AuditWriteup.fromMap(map)).toList();
+  }
+
+  Future<List<AuditWriteup>> getWriteupsPendingCcExport() async {
+    final db = await database;
+
+    final List<Map<String, dynamic>> maps = await db.query(
+      'audit_writeups',
+      where: 'cc_exported = ?',
+      whereArgs: [0],
+      orderBy: 'date_detected DESC',
+    );
+
+    return maps.map((map) => AuditWriteup.fromMap(map)).toList();
+  }
+
+  Future<int> markWriteupsDbExported(List<int> ids) async {
+    if (ids.isEmpty) return 0;
+
+    final db = await database;
+    final placeholders = List.filled(ids.length, '?').join(',');
+
+    return await db.update(
+      'audit_writeups',
+      {'db_exported': 1},
+      where: 'id IN ($placeholders)',
+      whereArgs: ids,
+    );
+  }
+
+  Future<int> markWriteupsCcExported(List<int> ids) async {
+    if (ids.isEmpty) return 0;
+
+    final db = await database;
+    final placeholders = List.filled(ids.length, '?').join(',');
+
+    return await db.update(
+      'audit_writeups',
+      {'cc_exported': 1},
+      where: 'id IN ($placeholders)',
+      whereArgs: ids,
+    );
+  }
+
+  Future<int> markWriteupsPdfExportedByIds(List<int> ids) async {
+    if (ids.isEmpty) return 0;
+
+    final db = await database;
+    final placeholders = List.filled(ids.length, '?').join(',');
+
+    return await db.update(
+      'audit_writeups',
+      {'pdf_exported': 1},
+      where: 'id IN ($placeholders)',
+      whereArgs: ids,
+    );
+  }
+
+  Future<int> markWriteupsPdfExportedByPlant(String plantNumber) async {
+    final db = await database;
+
+    return await db.update(
+      'audit_writeups',
+      {'pdf_exported': 1},
+      where: 'plant_number = ?',
+      whereArgs: [plantNumber],
+    );
+  }
+
   Future<int> deleteAllWriteups() async {
     final db = await database;
     return await db.delete('audit_writeups');
+  }
+
+  Future<int> purgeFullyExportedWriteups() async {
+    final db = await database;
+    return await db.delete(
+      'audit_writeups',
+      where: 'pdf_exported = 1 AND db_exported = 1 AND cc_exported = 1',
+    );
   }
 
   Future<List<PlantSessionSummary>> getPlantSessionSummaries() async {
     final db = await database;
 
     final results = await db.rawQuery('''
-      SELECT plant_number, COUNT(*) AS writeupCount
+      SELECT
+        plant_number,
+        COUNT(*) AS writeupCount,
+        SUM(CASE WHEN pdf_exported = 0 THEN 1 ELSE 0 END) AS pendingPdfCount,
+        SUM(CASE WHEN db_exported = 0 THEN 1 ELSE 0 END) AS pendingDbCount,
+        SUM(CASE WHEN cc_exported = 0 THEN 1 ELSE 0 END) AS pendingCcCount
       FROM audit_writeups
+      WHERE NOT (
+        pdf_exported = 1
+        AND db_exported = 1
+        AND cc_exported = 1
+      )
       GROUP BY plant_number
       ORDER BY CAST(plant_number AS INTEGER)
     ''');
 
-    return results.map((row) {
-      return PlantSessionSummary(
-        plantNumber: row['plant_number'] as String,
-        writeupCount: row['writeupCount'] as int,
-      );
-    }).toList();
+    return results.map((row) => PlantSessionSummary.fromMap(row)).toList();
+  }
+
+  Future<List<PlantSessionSummary>>
+  getFullyExportedPlantSessionSummaries() async {
+    final db = await database;
+
+    final results = await db.rawQuery('''
+      SELECT
+        plant_number,
+        COUNT(*) AS writeupCount,
+        0 AS pendingPdfCount,
+        0 AS pendingDbCount,
+        0 AS pendingCcCount
+      FROM audit_writeups
+      WHERE pdf_exported = 1
+        AND db_exported = 1
+        AND cc_exported = 1
+      GROUP BY plant_number
+      ORDER BY CAST(plant_number AS INTEGER)
+    ''');
+
+    return results.map((row) => PlantSessionSummary.fromMap(row)).toList();
+  }
+
+  Future<int> resetExportFlagsForPlant(
+    String plantNumber, {
+    bool resetPdf = false,
+    bool resetDb = false,
+    bool resetCc = false,
+    bool onlyFullyExported = false,
+  }) async {
+    if (!resetPdf && !resetDb && !resetCc) {
+      return 0;
+    }
+
+    final db = await database;
+
+    final Map<String, dynamic> values = {};
+    if (resetPdf) values['pdf_exported'] = 0;
+    if (resetDb) values['db_exported'] = 0;
+    if (resetCc) values['cc_exported'] = 0;
+
+    String where = 'plant_number = ?';
+    final List<dynamic> whereArgs = [plantNumber];
+
+    if (onlyFullyExported) {
+      where += '''
+        AND pdf_exported = 1
+        AND db_exported = 1
+        AND cc_exported = 1
+      ''';
+    }
+
+    return await db.update(
+      'audit_writeups',
+      values,
+      where: where,
+      whereArgs: whereArgs,
+    );
   }
 
   Future<int> getRviaCodeCount() async {
