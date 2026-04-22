@@ -393,6 +393,9 @@ class _SessionScreenState extends State<SessionScreen> {
   Widget build(BuildContext context) {
     final hasUnexportedWriteups = _sessionSummaries.isNotEmpty;
     final hasFullyExportedWriteups = _fullyExportedSessionSummaries.isNotEmpty;
+    final hasPendingCsvExports = _sessionSummaries.any(
+      (summary) => summary.pendingDbCount > 0 || summary.pendingCcCount > 0,
+    );
 
     return Scaffold(
       appBar: AppBar(
@@ -459,7 +462,7 @@ class _SessionScreenState extends State<SessionScreen> {
             ),
             const SizedBox(height: 20),
             ElevatedButton.icon(
-              onPressed: hasUnexportedWriteups && !_isExportingCsv
+              onPressed: hasPendingCsvExports && !_isExportingCsv
                   ? _exportAllCsvs
                   : null,
               icon: _isExportingCsv
