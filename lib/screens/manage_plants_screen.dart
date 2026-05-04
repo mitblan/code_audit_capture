@@ -163,6 +163,8 @@ class _ManagePlantsScreenState extends State<ManagePlantsScreen> {
 
       await _loadPlants();
 
+      if (!mounted) return;
+
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Plant ${plant.plantNumber} deleted.')),
       );

@@ -506,7 +506,7 @@ class _NewWriteupScreenState extends State<NewWriteupScreen> {
           flex: 2,
           child: DropdownButtonFormField<String>(
             isExpanded: true,
-            value: _unitPrefixOptions().contains(_selectedUnitPrefix)
+            initialValue: _unitPrefixOptions().contains(_selectedUnitPrefix)
                 ? _selectedUnitPrefix
                 : null,
             decoration: const InputDecoration(
@@ -571,7 +571,8 @@ class _NewWriteupScreenState extends State<NewWriteupScreen> {
           flex: 2,
           child: DropdownButtonFormField<String>(
             isExpanded: true,
-            value: _productLineOptions().contains(_selectedProductLineCode)
+            initialValue:
+                _productLineOptions().contains(_selectedProductLineCode)
                 ? _selectedProductLineCode
                 : null,
             decoration: const InputDecoration(
@@ -628,7 +629,7 @@ class _NewWriteupScreenState extends State<NewWriteupScreen> {
 
     final departmentField = DropdownButtonFormField<String>(
       isExpanded: true,
-      value: _departmentOptions().contains(_selectedDepartment)
+      initialValue: _departmentOptions().contains(_selectedDepartment)
           ? _selectedDepartment
           : null,
       decoration: const InputDecoration(

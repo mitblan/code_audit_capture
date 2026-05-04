@@ -133,7 +133,7 @@ class _RviaSearchScreenState extends State<RviaSearchScreen> {
         child: Column(
           children: [
             DropdownButtonFormField<String>(
-              value: _categories.contains(_selectedCategory)
+              initialValue: _categories.contains(_selectedCategory)
                   ? _selectedCategory
                   : 'All',
               decoration: const InputDecoration(

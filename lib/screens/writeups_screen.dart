@@ -2,7 +2,8 @@ import 'package:flutter/material.dart';
 import 'new_writeup_screen.dart';
 import '../models/audit_writeup.dart';
 import '../services/database_service.dart';
-import '../services/export_service.dart';
+// Commented out before removal
+// import '../services/export_service.dart';
 import '../services/session_pdf_export_service.dart';
 
 class WriteupsScreen extends StatefulWidget {
@@ -62,31 +63,31 @@ class _WriteupsScreenState extends State<WriteupsScreen> {
 
     await _loadWriteups();
   }
+  // Commented out before removal
+  // Future<void> _exportWriteups() async {
+  //   try {
+  //     final String? result = await ExportService().exportAllWriteupsToCsv();
 
-  Future<void> _exportWriteups() async {
-    try {
-      final String? result = await ExportService().exportAllWriteupsToCsv();
+  //     if (!context.mounted) return;
 
-      if (!context.mounted) return;
+  //     if (result == null) {
+  //       ScaffoldMessenger.of(
+  //         context,
+  //       ).showSnackBar(const SnackBar(content: Text('Export cancelled.')));
+  //       return;
+  //     }
 
-      if (result == null) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(const SnackBar(content: Text('Export cancelled.')));
-        return;
-      }
+  //     ScaffoldMessenger.of(context).showSnackBar(
+  //       const SnackBar(content: Text('Export completed successfully.')),
+  //     );
+  //   } catch (e) {
+  //     if (!context.mounted) return;
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Export completed successfully.')),
-      );
-    } catch (e) {
-      if (!context.mounted) return;
-
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('Export failed: $e')));
-    }
-  }
+  //     ScaffoldMessenger.of(
+  //       context,
+  //     ).showSnackBar(SnackBar(content: Text('Export failed: $e')));
+  //   }
+  // }
 
   Future<void> _exportPlantPdf(String plantNumber) async {
     try {

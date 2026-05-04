@@ -89,11 +89,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
         ),
       );
     } finally {
-      if (!mounted) return;
-
-      setState(() {
-        _isImporting = false;
-      });
+      if (mounted) {
+        setState(() {
+          _isImporting = false;
+        });
+      }
     }
   }
 

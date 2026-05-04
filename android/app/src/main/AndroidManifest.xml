@@ -1,6 +1,6 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <application
-        android:label="code_audit_capture"
+        android:label="Code Buster"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
         <activity

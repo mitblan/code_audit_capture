@@ -132,6 +132,7 @@ class _SessionScreenState extends State<SessionScreen> {
 
       await _loadSessionSummaries();
 
+      // ignore: use_build_context_synchronously
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('Exported:\n$dbImportPath\n$ccImportPath'),
@@ -145,6 +146,7 @@ class _SessionScreenState extends State<SessionScreen> {
         context,
       ).showSnackBar(SnackBar(content: Text('Export failed: $e')));
     } finally {
+      // ignore: control_flow_in_finally
       if (!mounted) return;
 
       setState(() {
@@ -189,6 +191,7 @@ class _SessionScreenState extends State<SessionScreen> {
 
       await _loadSessionSummaries();
 
+      // ignore: use_build_context_synchronously
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
@@ -222,6 +225,7 @@ class _SessionScreenState extends State<SessionScreen> {
       } else {
         await _loadSessionSummaries();
 
+        // ignore: use_build_context_synchronously
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('PDF saved successfully.')),
         );
@@ -310,6 +314,7 @@ class _SessionScreenState extends State<SessionScreen> {
       if (resetCsv) parts.add('CSV');
       final resetSummary = parts.join(', ');
 
+      // ignore: use_build_context_synchronously
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
@@ -391,7 +396,8 @@ class _SessionScreenState extends State<SessionScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final hasUnexportedWriteups = _sessionSummaries.isNotEmpty;
+    // Commented out before removal
+    // final hasUnexportedWriteups = _sessionSummaries.isNotEmpty;
     final hasFullyExportedWriteups = _fullyExportedSessionSummaries.isNotEmpty;
     final hasPendingCsvExports = _sessionSummaries.any(
       (summary) => summary.pendingDbCount > 0 || summary.pendingCcCount > 0,
@@ -429,7 +435,7 @@ class _SessionScreenState extends State<SessionScreen> {
               children: [
                 Expanded(
                   child: DropdownButtonFormField<String>(
-                    value: _selectedPlant,
+                    initialValue: _selectedPlant,
                     decoration: const InputDecoration(
                       border: OutlineInputBorder(),
                       hintText: 'Select plant',

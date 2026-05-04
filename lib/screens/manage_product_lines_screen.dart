@@ -101,6 +101,8 @@ class _ManageProductLinesScreenState extends State<ManageProductLinesScreen> {
 
       await _loadProductLines();
 
+      if (!mounted) return;
+
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
@@ -147,6 +149,8 @@ class _ManageProductLinesScreenState extends State<ManageProductLinesScreen> {
 
       await _loadProductLines();
 
+      if (!mounted) return;
+
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(const SnackBar(content: Text('Deleted.')));
@@ -173,7 +177,7 @@ class _ManageProductLinesScreenState extends State<ManageProductLinesScreen> {
           ? const Center(child: Text('No product lines found.'))
           : ListView.separated(
               itemCount: _productLines.length,
-              separatorBuilder: (_, __) => const Divider(height: 1),
+              separatorBuilder: (_, _) => const Divider(height: 1),
               itemBuilder: (context, index) {
                 final line = _productLines[index];
 

@@ -143,7 +143,7 @@ class _ManagePlantProductLinesScreenState
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   DropdownButtonFormField<ProductLine>(
-                    value: selectedLine,
+                    initialValue: selectedLine,
                     decoration: const InputDecoration(
                       labelText: 'Product Line',
                       border: OutlineInputBorder(),
@@ -213,6 +213,8 @@ class _ManagePlantProductLinesScreenState
 
       await _loadAssignedLines();
 
+      if (!mounted) return;
+
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(const SnackBar(content: Text('Product line assigned.')));
@@ -239,6 +241,8 @@ class _ManagePlantProductLinesScreenState
       if (!mounted) return;
 
       await _loadAssignedLines();
+
+      if (!mounted) return;
 
       ScaffoldMessenger.of(
         context,
@@ -284,6 +288,8 @@ class _ManagePlantProductLinesScreenState
 
       await _loadAssignedLines();
 
+      if (!mounted) return;
+
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(const SnackBar(content: Text('Assignment removed.')));
@@ -312,7 +318,7 @@ class _ManagePlantProductLinesScreenState
           Padding(
             padding: const EdgeInsets.all(16),
             child: DropdownButtonFormField<String>(
-              value: _selectedPlant,
+              initialValue: _selectedPlant,
               decoration: const InputDecoration(
                 labelText: 'Plant',
                 border: OutlineInputBorder(),
@@ -348,7 +354,7 @@ class _ManagePlantProductLinesScreenState
                   )
                 : ListView.separated(
                     itemCount: _assignedLines.length,
-                    separatorBuilder: (_, __) => const Divider(height: 1),
+                    separatorBuilder: (_, _) => const Divider(height: 1),
                     itemBuilder: (context, index) {
                       final option = _assignedLines[index];
 

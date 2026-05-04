@@ -192,6 +192,8 @@ class _ManageUnitPrefixesScreenState extends State<ManageUnitPrefixesScreen> {
 
       await _loadPrefixes();
 
+      if (!mounted) return;
+
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
@@ -242,6 +244,8 @@ class _ManageUnitPrefixesScreenState extends State<ManageUnitPrefixesScreen> {
 
       await _loadPrefixes();
 
+      if (!mounted) return;
+
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(const SnackBar(content: Text('Prefix deleted.')));
@@ -270,7 +274,7 @@ class _ManageUnitPrefixesScreenState extends State<ManageUnitPrefixesScreen> {
           Padding(
             padding: const EdgeInsets.all(16),
             child: DropdownButtonFormField<String>(
-              value: _selectedPlant,
+              initialValue: _selectedPlant,
               decoration: const InputDecoration(
                 labelText: 'Plant',
                 border: OutlineInputBorder(),
@@ -304,7 +308,7 @@ class _ManageUnitPrefixesScreenState extends State<ManageUnitPrefixesScreen> {
                 ? const Center(child: Text('No prefixes found for this plant.'))
                 : ListView.separated(
                     itemCount: _prefixes.length,
-                    separatorBuilder: (_, __) => const Divider(height: 1),
+                    separatorBuilder: (_, _) => const Divider(height: 1),
                     itemBuilder: (context, index) {
                       final prefix = _prefixes[index];
 

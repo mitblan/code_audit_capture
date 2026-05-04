@@ -97,9 +97,11 @@ class _ManageDepartmentsScreenState extends State<ManageDepartmentsScreen> {
                   }
 
                   if (!mounted) return;
+                  // ignore: use_build_context_synchronously
                   Navigator.of(context).pop();
                   await _loadDepartments();
 
+                  // ignore: use_build_context_synchronously
                   ScaffoldMessenger.of(context).showSnackBar(
                     SnackBar(
                       content: Text(
@@ -110,6 +112,7 @@ class _ManageDepartmentsScreenState extends State<ManageDepartmentsScreen> {
                 } catch (e) {
                   if (!mounted) return;
 
+                  // ignore: use_build_context_synchronously
                   ScaffoldMessenger.of(context).showSnackBar(
                     SnackBar(
                       content: Text(
@@ -162,6 +165,7 @@ class _ManageDepartmentsScreenState extends State<ManageDepartmentsScreen> {
       await _loadDepartments();
 
       ScaffoldMessenger.of(
+        // ignore: use_build_context_synchronously
         context,
       ).showSnackBar(const SnackBar(content: Text('Department deleted.')));
     } catch (e) {
@@ -191,6 +195,7 @@ class _ManageDepartmentsScreenState extends State<ManageDepartmentsScreen> {
           : ListView.separated(
               padding: const EdgeInsets.all(16),
               itemCount: _departments.length,
+              // ignore: unnecessary_underscores
               separatorBuilder: (_, __) => const SizedBox(height: 8),
               itemBuilder: (context, index) {
                 final department = _departments[index];

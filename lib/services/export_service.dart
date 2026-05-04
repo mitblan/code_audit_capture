@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
-import 'dart:typed_data';
+// Commented out before removal
+// import 'dart:typed_data';
 
 import 'package:csv/csv.dart';
 import 'package:file_picker/file_picker.dart';
@@ -163,7 +164,7 @@ class ExportService {
     final minute = dateTime.minute.toString().padLeft(2, '0');
     final second = dateTime.second.toString().padLeft(2, '0');
 
-    return '${year}${month}${day}_$hour$minute$second';
+    return '$year$month${day}_$hour$minute$second';
   }
 
   String _buildLegacyFileName() {
